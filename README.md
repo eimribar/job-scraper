@@ -1,36 +1,289 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎯 Sales Tool Detector
 
-## Getting Started
+> **A production-ready internal tool for SDR and GTM teams to identify companies using Outreach.io or SalesLoft through automated job posting analysis.**
 
-First, run the development server:
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat&logo=supabase)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?style=flat&logo=vercel)](https://vercel.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
 
+## 🌟 Overview
+
+Sales Tool Detector automates the discovery of companies using popular sales engagement platforms by analyzing job descriptions from Indeed and LinkedIn. Built specifically for SDR and GTM teams who need qualified leads fast.
+
+### 🎯 Key Benefits
+- **Automated Prospecting**: Never miss companies actively hiring SDRs who use your tools
+- **High-Quality Leads**: AI-powered detection with confidence scoring
+- **Export Ready**: One-click CSV exports for CRM integration  
+- **Real-time Intelligence**: Live dashboard with discovery notifications
+- **Cost Effective**: Uses GPT-4-mini for efficient analysis
+
+## 🚀 Features
+
+### Core Functionality
+- **🔍 Smart Job Scraping**: Automated scraping from Indeed & LinkedIn
+- **🤖 AI-Powered Analysis**: OpenAI GPT-4-mini detects tool mentions
+- **📊 Real-time Dashboard**: Live stats and recent discoveries
+- **🎯 Advanced Filtering**: Filter by tool, confidence, date, location
+- **📤 Export Tools**: CSV/JSON export for CRM integration
+- **🔄 Deduplication**: Smart filtering prevents duplicate processing
+
+### User Experience
+- **🎨 Modern Interface**: Built with Next.js and shadcn/ui
+- **📱 Responsive Design**: Works perfectly on all devices
+- **⚡ Real-time Updates**: Live data without page refresh
+- **🧭 Intuitive Navigation**: Tabbed interface for easy access
+- **🌙 Dark Mode Ready**: Built-in theme support
+
+### Technical Excellence
+- **🏗️ Production Architecture**: Vercel + Supabase stack
+- **⚖️ Rate Limited**: Respects API limits with smart delays
+- **🛡️ Error Recovery**: Comprehensive error handling
+- **📈 Scalable**: PostgreSQL with optimized indexes
+- **🔐 Secure**: Environment-based configuration
+
+## 🏗️ Tech Stack
+
+| Category | Technology | Purpose |
+|----------|------------|---------|
+| **Frontend** | Next.js 14 + TypeScript | React framework with App Router |
+| **Backend** | Next.js API Routes | Server-side API endpoints |
+| **Database** | Supabase (PostgreSQL) | Data persistence and real-time features |
+| **UI Framework** | shadcn/ui + Tailwind CSS | Modern component library |
+| **Scraping** | Apify (Indeed & LinkedIn) | Reliable job data collection |
+| **AI Analysis** | OpenAI GPT-4-mini | Intelligent sales tool detection |
+| **Hosting** | Vercel | Production deployment |
+| **Authentication** | Supabase Auth | User management (future) |
+
+## 📦 Installation
+
+### Prerequisites
+- Node.js 18+ and npm
+- Supabase account and project
+- Apify account with tokens
+- OpenAI API key
+
+### 1. Clone Repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/eimribar/job-scraper.git
+cd job-scraper
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Environment Setup
+Copy `.env.local.example` to `.env.local` and configure:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
 
-## Learn More
+# Apify Configuration  
+APIFY_TOKEN=your_apify_token
 
-To learn more about Next.js, take a look at the following resources:
+# Application Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Database Setup
+1. Create a new Supabase project
+2. Run the SQL schema from `supabase-schema.sql` in the SQL editor
+3. Verify tables are created successfully
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. Development
+```bash
+npm run dev
+```
 
-## Deploy on Vercel
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🚀 Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Vercel Deployment (Recommended)
+
+1. **Connect Repository**
+   ```bash
+   # Push to GitHub first
+   git add .
+   git commit -m "Initial commit"
+   git push -u origin main
+   ```
+
+2. **Deploy to Vercel**
+   - Visit [Vercel Dashboard](https://vercel.com/dashboard)
+   - Import your GitHub repository
+   - Configure environment variables
+   - Deploy automatically
+
+3. **Configure Environment Variables**
+   Add all variables from `.env.local` in Vercel dashboard
+
+For detailed deployment instructions, see [CLOUD.md](CLOUD.md).
+
+## 📖 Usage
+
+### Dashboard Overview
+- **Stats Cards**: Total companies, Outreach vs SalesLoft breakdown
+- **Recent Discoveries**: Live feed of newly identified companies  
+- **Navigation Tabs**: Overview, Companies, Insights sections
+
+### API Endpoints
+
+#### Trigger Scraping
+```bash
+POST /api/scrape
+Content-Type: application/json
+
+{
+  "searchTerm": "SDR",
+  "maxItemsPerPlatform": 10
+}
+```
+
+#### Run AI Analysis
+```bash
+POST /api/analyze
+Content-Type: application/json
+
+{
+  "limit": 10
+}
+```
+
+#### Export Companies
+```bash
+GET /api/companies/export?tool=Outreach.io&confidence=high&format=csv
+```
+
+### Search Configuration
+
+Default search terms include:
+- SDR (Sales Development Representative)
+- BDR (Business Development Representative)  
+- Sales Development
+- Revenue Operations
+- Sales Manager
+
+Add custom terms directly in the `search_terms` database table.
+
+### AI Detection Logic
+
+The system uses sophisticated pattern matching to distinguish between:
+
+**✅ Valid Indicators:**
+- "Outreach.io" or "SalesLoft" (exact platform names)
+- "Outreach platform" / "SalesLoft sequences" 
+- "Experience with Outreach" (capitalized, with other tools)
+- Technical integration mentions
+
+**❌ Invalid (General Terms):**
+- "sales outreach" / "cold outreach" 
+- "outreach efforts" / "customer outreach"
+- Generic sales terminology
+
+## 🔧 Configuration
+
+### Rate Limits
+- **Scraping**: 5-second delays between platforms
+- **Analysis**: 1-second delays between OpenAI calls  
+- **Daily Quotas**: Configurable per search term
+
+### Database Optimization
+- Indexed columns for fast queries
+- Automatic deduplication
+- 30-day refresh cycles for search terms
+- Row-level security (when auth enabled)
+
+## 📊 Monitoring
+
+### Health Checks
+- `GET /api/dashboard` - System health and statistics
+- `GET /api/scrape` - View pending scraping tasks
+- `GET /api/analyze` - Check unprocessed jobs queue
+
+### Logs & Analytics
+- Comprehensive operation logging
+- Error tracking with stack traces  
+- Performance monitoring
+- Success/failure metrics
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Workflow
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests if applicable
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+## 📝 Documentation
+
+- [📘 Cloud Deployment Guide](CLOUD.md) - Detailed deployment instructions
+- [📋 Contributing Guidelines](CONTRIBUTING.md) - Development best practices  
+- [📅 Changelog](CHANGELOG.md) - Version history and updates
+- [🔒 Security Policy](SECURITY.md) - Security guidelines and reporting
+- [❓ FAQ](FAQ.md) - Frequently asked questions
+- [🐛 Troubleshooting](TROUBLESHOOTING.md) - Common issues and solutions
+
+## 🛣️ Roadmap
+
+### 🎯 Current (v1.0)
+- ✅ Core scraping and analysis
+- ✅ Dashboard with filtering
+- ✅ Export functionality
+- ✅ Production deployment
+
+### 🚀 Near Term (v1.1)
+- [ ] Slack integration for notifications
+- [ ] Advanced filtering options
+- [ ] Batch processing improvements
+- [ ] Enhanced error recovery
+
+### 🔮 Future (v2.0)
+- [ ] Territory mapping and geo-filtering
+- [ ] Competitive intelligence features
+- [ ] CRM integrations (Salesforce, HubSpot)
+- [ ] Advanced analytics and trends
+- [ ] Multi-tenant architecture
+- [ ] White-label solutions
+
+## ⚠️ Known Issues
+
+- Apify scrapers may hit rate limits with high-volume searches
+- LinkedIn scraper occasionally blocked by anti-bot measures
+- OpenAI API costs scale with job volume
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for solutions.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+### Getting Help
+- 📖 Check the [Documentation](docs/)
+- 🐛 Report bugs via [Issues](https://github.com/eimribar/job-scraper/issues)
+- 💬 Discussion via [GitHub Discussions](https://github.com/eimribar/job-scraper/discussions)
+
+### Enterprise Support
+For enterprise deployments and custom features, contact [your-email@domain.com](mailto:your-email@domain.com).
+
+---
+
+<div align="center">
+
+**Built with ❤️ for SDR and GTM teams**
+
+[⭐ Star this repo](https://github.com/eimribar/job-scraper) • [🐛 Report Bug](https://github.com/eimribar/job-scraper/issues) • [🔧 Request Feature](https://github.com/eimribar/job-scraper/issues)
+
+</div>
