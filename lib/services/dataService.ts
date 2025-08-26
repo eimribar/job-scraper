@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '../supabase';
+import { createApiSupabaseClient } from '../supabase';
 import { ScrapedJob } from './scraperService';
 import { AnalyzedJob } from './analysisService';
 import type { Database } from '../database.types';
@@ -12,8 +12,13 @@ export class DataService {
   private isConfigured: boolean;
 
   constructor() {
-    this.supabase = createServerSupabaseClient();
-    this.isConfigured = !!this.supabase;
+    try {
+      this.supabase = createApiSupabaseClient();
+      this.isConfigured = true;
+    } catch (error) {
+      console.error('Failed to initialize Supabase client:', error);
+      this.isConfigured = false;
+    }
   }
 
   // Jobs management
@@ -219,7 +224,7 @@ export class DataService {
     const { data, error } = await this.supabase
       .from('search_terms')
       .select('*')
-      .eq('active', true)
+      .eq('is_active', true)
       .order('search_term');
 
     if (error) {
@@ -332,6 +337,22 @@ export class DataService {
     }
 
     return data?.map(job => job.id) || [];
+  }
+
+  // Check if a specific job ID already exists
+  async jobExists(jobId: string): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('job_queue')
+      .select('id, payload')
+      .limit(1000);
+
+    if (error) {
+      console.error('Error checking job existence:', error);
+      return false;
+    }
+
+    // Check in memory if any job has this job_id
+    return data?.some(job => job.payload?.job_id === jobId) || false;
   }
 
   async getKnownCompanies(): Promise<string[]> {

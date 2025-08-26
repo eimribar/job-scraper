@@ -54,36 +54,8 @@ export class AnalysisService {
     }
   }
 
-  async analyzeJobs(jobs: ScrapedJob[]): Promise<AnalyzedJob[]> {
-    const results: AnalyzedJob[] = [];
-    
-    for (const job of jobs) {
-      try {
-        const analyzedJob = await this.analyzeJob(job);
-        results.push(analyzedJob);
-        
-        // Add delay between API calls to respect rate limits
-        await this.delay(1000);
-      } catch (error) {
-        console.error(`Error analyzing job ${job.job_id}:`, error);
-        
-        // Add job with empty analysis on error
-        results.push({
-          ...job,
-          analysis: {
-            uses_tool: false,
-            tool_detected: 'none',
-            signal_type: 'none',
-            context: '',
-            confidence: 'low',
-          },
-          analysis_date: new Date().toISOString(),
-        });
-      }
-    }
-    
-    return results;
-  }
+  // Single job analysis only - no batching per requirements
+  // Each job is processed one at a time through OpenAI
 
   private async detectSalesTools(job: ScrapedJob): Promise<AnalysisResult> {
     const systemPrompt = `You are an expert at analyzing job descriptions to identify if companies use Outreach.io or SalesLoft.
@@ -117,13 +89,13 @@ Job Title: ${job.job_title}
 Job Description: ${job.description}`;
 
     const response = await this.openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07', // ONLY use GPT-5-mini as specified by user
+      model: process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07', // Using GPT-5-mini as configured
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0,
-      max_tokens: 500,
+      // temperature: 0, // GPT-5-mini only supports default temperature (1)
+      max_completion_tokens: 500, // Changed from max_tokens for GPT-5-mini compatibility
     });
 
     const content = response.choices[0]?.message?.content;

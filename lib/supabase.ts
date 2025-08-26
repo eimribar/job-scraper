@@ -1,9 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // Check if we have valid configuration
 const hasValidConfig = supabaseUrl && 
@@ -12,7 +14,18 @@ const hasValidConfig = supabaseUrl &&
   supabaseAnonKey !== 'your_supabase_anon_key' &&
   supabaseUrl.startsWith('https://')
 
-// For server-side operations
+// For API routes - simple client without SSR/cookies
+export function createApiSupabaseClient() {
+  if (!hasValidConfig) {
+    throw new Error('Supabase configuration is missing');
+  }
+  
+  // Use service role key if available, otherwise use anon key
+  const key = supabaseServiceKey || supabaseAnonKey;
+  return createClient(supabaseUrl, key);
+}
+
+// For server-side operations (with cookies)
 export function createServerSupabaseClient() {
   if (!hasValidConfig) {
     // Return a mock client that won't cause errors

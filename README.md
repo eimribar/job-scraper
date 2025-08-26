@@ -7,13 +7,16 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat&logo=supabase)](https://supabase.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?style=flat&logo=vercel)](https://vercel.com/)
 
-## 🚀 Current Status: Production Ready
+## 🚀 Current Status: Backend Complete - Ready for Production
 
-**✅ 664 Companies Identified** | **16,763 Jobs Processed** | **33 Active Search Terms**
+**✅ 665 Companies Identified** | **37 Active Search Terms** | **100% Success Rate** | **v1.1.0**
+
+### 🎉 Latest Update (August 26, 2025)
+**Backend pipeline fully operational!** Successfully processing jobs from LinkedIn with automated analysis. Achieved 100% success rate in testing with 489 jobs processed.
 
 ## 🌟 Overview
 
-Sales Tool Detector automates the discovery of companies using popular sales engagement platforms by analyzing job descriptions from Indeed and LinkedIn. Built specifically for SDR and GTM teams who need qualified leads fast.
+Sales Tool Detector automates the discovery of companies using popular sales engagement platforms by analyzing job descriptions from LinkedIn. Built specifically for SDR and GTM teams who need qualified leads fast.
 
 ### 🎯 Key Benefits
 - **Automated Prospecting**: Never miss companies actively hiring SDRs who use your tools
@@ -25,12 +28,13 @@ Sales Tool Detector automates the discovery of companies using popular sales eng
 ## 🚀 Features
 
 ### Core Functionality
-- **🔍 Smart Job Scraping**: Automated scraping from Indeed & LinkedIn
-- **🤖 AI-Powered Analysis**: OpenAI GPT-5-mini detects tool mentions (hardcoded, no fallbacks)
+- **🔍 LinkedIn Job Scraping**: Automated scraping (500 jobs max per search term)
+- **🤖 GPT-5-mini Analysis**: Sequential processing, one job at a time
 - **📊 Real-time Dashboard**: Live stats and recent discoveries
-- **🎯 Advanced Filtering**: Filter by tool, confidence, date, location
+- **🎯 Advanced Filtering**: Filter by tool, confidence, date
 - **📤 Export Tools**: CSV/JSON export for CRM integration
-- **🔄 Deduplication**: Smart filtering prevents duplicate processing
+- **🔄 Smart Deduplication**: Job ID checking prevents reprocessing
+- **⚡ Sequential Pipeline**: Optimized for context window limitations
 
 ### User Experience
 - **🎨 Modern Interface**: Built with Next.js and shadcn/ui

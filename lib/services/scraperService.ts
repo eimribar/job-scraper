@@ -1,4 +1,4 @@
-import ApifyClient from 'apify-client';
+const { ApifyClient } = require('apify-client');
 
 export interface ScrapedJob {
   job_id: string;
@@ -13,7 +13,7 @@ export interface ScrapedJob {
 }
 
 export class ScraperService {
-  private apifyClient: InstanceType<typeof ApifyClient>;
+  private apifyClient: ApifyClient;
 
   constructor() {
     if (!process.env.APIFY_TOKEN) {
@@ -24,57 +24,16 @@ export class ScraperService {
     });
   }
 
-  async scrapeIndeedJobs(searchTerm: string, maxItems: number = 10): Promise<ScrapedJob[]> {
-    try {
-      console.log(`Scraping Indeed for: ${searchTerm}`);
-      
-      const run = await this.apifyClient.actor('misceres~indeed-scraper').call({
-        followApplyRedirects: false,
-        maxItems,
-        parseCompanyDetails: true,
-        position: searchTerm,
-        saveOnlyUniqueItems: true,
-      });
+  // Indeed scraping removed - LinkedIn only as per requirements
 
-      const { items } = await this.apifyClient.dataset(run.defaultDatasetId).listItems();
-      
-      return items.map((item: unknown) => {
-        const jobItem = item as {
-          id?: string;
-          company?: string;
-          positionName?: string;
-          location?: string;
-          description?: string;
-          url?: string;
-          externalApplyLink?: string;
-        };
-        
-        return {
-          job_id: `indeed_${jobItem.id || Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          platform: 'Indeed',
-          company: jobItem.company || '',
-          job_title: jobItem.positionName || '',
-          location: jobItem.location || '',
-          description: jobItem.description || '',
-          job_url: jobItem.url || jobItem.externalApplyLink || '',
-          scraped_date: new Date().toISOString(),
-          search_term: searchTerm,
-        };
-      });
-    } catch (error) {
-      console.error('Error scraping Indeed:', error);
-      throw error;
-    }
-  }
-
-  async scrapeLinkedInJobs(searchTerm: string, maxItems: number = 10): Promise<ScrapedJob[]> {
+  async scrapeLinkedInJobs(searchTerm: string, maxItems: number = 500): Promise<ScrapedJob[]> {
     try {
-      console.log(`Scraping LinkedIn for: ${searchTerm}`);
+      console.log(`Scraping LinkedIn for: ${searchTerm} (max ${maxItems} jobs)`);
       
       const run = await this.apifyClient.actor('bebity~linkedin-jobs-scraper').call({
         proxy: {
           useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL'],
+          apifyProxyGroups: [], // Standard proxy as per requirements
         },
         rows: maxItems,
         title: searchTerm,
@@ -110,27 +69,20 @@ export class ScraperService {
     }
   }
 
-  async scrapeAllPlatforms(searchTerm: string, maxItemsPerPlatform: number = 10): Promise<ScrapedJob[]> {
-    const results: ScrapedJob[] = [];
-    
+  // LinkedIn-only scraping as per requirements
+  async scrapeJobs(searchTerm: string, maxItems: number = 500): Promise<ScrapedJob[]> {
     try {
-      // Scrape Indeed
-      const indeedJobs = await this.scrapeIndeedJobs(searchTerm, maxItemsPerPlatform);
-      results.push(...indeedJobs);
+      console.log(`Starting LinkedIn scrape for: ${searchTerm}`);
       
-      // Add delay between platforms to respect rate limits
-      await this.delay(5000);
+      // Scrape LinkedIn only
+      const linkedinJobs = await this.scrapeLinkedInJobs(searchTerm, maxItems);
+      console.log(`Scraped ${linkedinJobs.length} jobs for search term: ${searchTerm}`);
       
-      // Scrape LinkedIn
-      const linkedinJobs = await this.scrapeLinkedInJobs(searchTerm, maxItemsPerPlatform);
-      results.push(...linkedinJobs);
-      
+      return linkedinJobs;
     } catch (error) {
-      console.error('Error in scrapeAllPlatforms:', error);
+      console.error('Error scraping jobs:', error);
       throw error;
     }
-    
-    return this.deduplicateJobs(results);
   }
 
   private deduplicateJobs(jobs: ScrapedJob[]): ScrapedJob[] {
