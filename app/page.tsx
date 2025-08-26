@@ -1,5 +1,6 @@
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { RecentDiscoveries } from "@/components/dashboard/recent-discoveries";
+import { CompaniesTableWrapper } from "@/components/companies/companies-table-wrapper";
 import { DataService } from "@/lib/services/dataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,19 +124,10 @@ export default async function Dashboard() {
             {/* Companies Tab */}
             <TabsContent value="companies">
               <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Companies Table</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">
-                      Interactive companies table will be available once the database is configured.
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Companies: {totalCompaniesCount} | Displayed: {companies.length}
-                    </p>
-                  </CardContent>
-                </Card>
+                <CompaniesTableWrapper 
+                  companies={companies}
+                  totalCount={totalCompaniesCount}
+                />
               </div>
             </TabsContent>
 

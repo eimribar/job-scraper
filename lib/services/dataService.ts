@@ -21,21 +21,24 @@ export class DataService {
     if (jobs.length === 0) return;
 
     const { error } = await this.supabase
-      .from('jobs')
-      .upsert(
+      .from('job_queue')
+      .insert(
         jobs.map(job => ({
-          job_id: job.job_id,
-          platform: job.platform,
-          company: job.company,
-          job_title: job.job_title,
-          location: job.location,
-          description: job.description,
-          job_url: job.job_url,
-          scraped_date: job.scraped_date,
-          search_term: job.search_term,
-          processed: false,
-        })),
-        { onConflict: 'job_id' }
+          job_type: 'analyze',
+          status: 'pending',
+          payload: {
+            job_id: job.job_id,
+            platform: job.platform,
+            company: job.company,
+            job_title: job.job_title,
+            location: job.location,
+            description: job.description,
+            job_url: job.job_url,
+            scraped_date: job.scraped_date,
+            search_term: job.search_term,
+          },
+          created_at: job.scraped_date,
+        }))
       );
 
     if (error) {
@@ -46,10 +49,11 @@ export class DataService {
 
   async getUnprocessedJobs(limit: number = 100): Promise<JobRow[]> {
     const { data, error } = await this.supabase
-      .from('jobs')
+      .from('job_queue')
       .select('*')
-      .eq('processed', false)
-      .order('scraped_date', { ascending: true })
+      .eq('status', 'pending')
+      .eq('job_type', 'analyze')
+      .order('created_at', { ascending: true })
       .limit(limit);
 
     if (error) {
@@ -57,17 +61,31 @@ export class DataService {
       throw error;
     }
 
-    return data || [];
+    // Map to expected format
+    return data?.map(job => ({
+      id: job.id,
+      job_id: job.payload?.job_id || job.id,
+      platform: job.payload?.platform || '',
+      company: job.payload?.company || '',
+      job_title: job.payload?.job_title || '',
+      location: job.payload?.location || '',
+      description: job.payload?.description || '',
+      job_url: job.payload?.job_url || '',
+      scraped_date: job.created_at,
+      search_term: job.payload?.search_term || '',
+      processed: job.status === 'completed',
+      analyzed_date: job.completed_at,
+    })) || [];
   }
 
   async markJobAsProcessed(jobId: string): Promise<void> {
     const { error } = await this.supabase
-      .from('jobs')
+      .from('job_queue')
       .update({ 
-        processed: true, 
-        analyzed_date: new Date().toISOString() 
+        status: 'completed', 
+        completed_at: new Date().toISOString() 
       })
-      .eq('job_id', jobId);
+      .eq('id', jobId);
 
     if (error) {
       console.error('Error marking job as processed:', error);
@@ -105,24 +123,37 @@ export class DataService {
     limit: number = 100, 
     offset: number = 0,
     tool?: string,
-    confidence?: string
+    confidence?: string,
+    search?: string
   ): Promise<IdentifiedCompanyRow[]> {
     if (!this.isConfigured) {
       // Return empty array when not configured
       return [];
     }
     let query = this.supabase
-      .from('identified_companies')
+      .from('companies')
       .select('*')
-      .order('identified_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
+    // Filter by tool
     if (tool && tool !== 'all') {
-      query = query.eq('tool_detected', tool);
+      if (tool === 'Outreach.io') {
+        query = query.eq('uses_outreach', true);
+      } else if (tool === 'SalesLoft') {
+        query = query.eq('uses_salesloft', true);
+      } else if (tool === 'Both') {
+        query = query.eq('uses_both', true);
+      }
     }
 
     if (confidence && confidence !== 'all') {
-      query = query.eq('confidence', confidence);
+      query = query.eq('detection_confidence', confidence);
+    }
+
+    // Add search filter
+    if (search) {
+      query = query.ilike('name', `%${search}%`);
     }
 
     const { data, error } = await query;
@@ -132,23 +163,45 @@ export class DataService {
       throw error;
     }
 
-    return data || [];
+    // Map to expected format with all fields
+    return data?.map(c => ({
+      id: c.id,
+      company_name: c.name,
+      tool_detected: c.uses_both ? 'Both' : c.uses_outreach ? 'Outreach.io' : c.uses_salesloft ? 'SalesLoft' : 'none',
+      signal_type: c.signal_type || c.requirement_level || '',
+      context: c.context || '',
+      confidence: c.detection_confidence || 'low',
+      job_title: c.job_title || '',
+      job_url: c.job_url || '',
+      platform: c.platform || '',
+      identified_date: c.identified_date || c.created_at
+    })) || [];
   }
 
-  async getIdentifiedCompaniesCount(tool?: string, confidence?: string): Promise<number> {
+  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string): Promise<number> {
     if (!this.isConfigured) {
       return 0;
     }
     let query = this.supabase
-      .from('identified_companies')
+      .from('companies')
       .select('id', { count: 'exact', head: true });
 
     if (tool && tool !== 'all') {
-      query = query.eq('tool_detected', tool);
+      if (tool === 'Outreach.io') {
+        query = query.eq('uses_outreach', true);
+      } else if (tool === 'SalesLoft') {
+        query = query.eq('uses_salesloft', true);
+      } else if (tool === 'Both') {
+        query = query.eq('uses_both', true);
+      }
     }
 
     if (confidence && confidence !== 'all') {
-      query = query.eq('confidence', confidence);
+      query = query.eq('detection_confidence', confidence);
+    }
+
+    if (search) {
+      query = query.ilike('name', `%${search}%`);
     }
 
     const { count, error } = await query;
@@ -207,40 +260,49 @@ export class DataService {
     }
     
     try {
-      // Get total companies by tool
-      const { data: toolStats, error: toolError } = await this.supabase!
-        .from('identified_companies')
-        .select('tool_detected')
-        .not('tool_detected', 'eq', 'none');
+      // Get total companies by tool from new schema
+      const { data: companies, error: companiesError } = await this.supabase!
+        .from('companies')
+        .select('name, uses_outreach, uses_salesloft, created_at')
+        .or('uses_outreach.eq.true,uses_salesloft.eq.true');
 
-      if (toolError) throw toolError;
+      if (companiesError) throw companiesError;
 
-      const outreachCount = toolStats?.filter(s => s.tool_detected === 'Outreach.io').length || 0;
-      const salesLoftCount = toolStats?.filter(s => s.tool_detected === 'SalesLoft').length || 0;
-      const totalCompanies = outreachCount + salesLoftCount;
+      const outreachCount = companies?.filter(c => c.uses_outreach).length || 0;
+      const salesLoftCount = companies?.filter(c => c.uses_salesloft).length || 0;
+      const totalCompanies = companies?.length || 0;
 
       // Get recent discoveries (last 24 hours)
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      const { data: recentDiscoveries, error: recentError } = await this.supabase
-        .from('identified_companies')
-        .select('company_name, tool_detected, identified_date')
-        .gte('identified_date', yesterday.toISOString())
-        .order('identified_date', { ascending: false })
+      const { data: recentCompanies, error: recentError } = await this.supabase
+        .from('companies')
+        .select('name, uses_outreach, uses_salesloft, created_at')
+        .gte('created_at', yesterday.toISOString())
+        .order('created_at', { ascending: false })
         .limit(10);
 
       if (recentError) throw recentError;
 
-      // Get total jobs processed today
+      // Map to the expected format
+      const recentDiscoveries = recentCompanies?.map(c => ({
+        company_name: c.name,
+        tool_detected: c.uses_outreach && c.uses_salesloft ? 'Both' : 
+                      c.uses_outreach ? 'Outreach.io' : 
+                      c.uses_salesloft ? 'SalesLoft' : 'none',
+        identified_date: c.created_at
+      })) || [];
+
+      // Get total jobs processed today from job_queue
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
       const { count: jobsProcessedToday, error: jobsError } = await this.supabase
-        .from('jobs')
+        .from('job_queue')
         .select('id', { count: 'exact', head: true })
-        .gte('scraped_date', today.toISOString())
-        .eq('processed', true);
+        .gte('created_at', today.toISOString())
+        .eq('status', 'completed');
 
       if (jobsError) throw jobsError;
 
@@ -248,7 +310,7 @@ export class DataService {
         totalCompanies,
         outreachCount,
         salesLoftCount,
-        recentDiscoveries: recentDiscoveries || [],
+        recentDiscoveries,
         jobsProcessedToday: jobsProcessedToday || 0,
       };
     } catch (error) {
@@ -260,29 +322,29 @@ export class DataService {
   // Check for existing processed jobs and companies (for deduplication)
   async getProcessedJobIds(): Promise<string[]> {
     const { data, error } = await this.supabase
-      .from('jobs')
-      .select('job_id')
-      .eq('processed', true);
+      .from('job_queue')
+      .select('id')
+      .eq('status', 'completed');
 
     if (error) {
       console.error('Error fetching processed job IDs:', error);
       return [];
     }
 
-    return data?.map(job => job.job_id) || [];
+    return data?.map(job => job.id) || [];
   }
 
   async getKnownCompanies(): Promise<string[]> {
     const { data, error } = await this.supabase
-      .from('identified_companies')
-      .select('company_name');
+      .from('companies')
+      .select('name');
 
     if (error) {
       console.error('Error fetching known companies:', error);
       return [];
     }
 
-    return data?.map(company => company.company_name.toLowerCase().trim()) || [];
+    return data?.map(company => company.name.toLowerCase().trim()) || [];
   }
 
   // Export functionality

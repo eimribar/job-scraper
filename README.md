@@ -2,11 +2,14 @@
 
 > **A production-ready internal tool for SDR and GTM teams to identify companies using Outreach.io or SalesLoft through automated job posting analysis.**
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat&logo=supabase)](https://supabase.com/)
 [![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?style=flat&logo=vercel)](https://vercel.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
+
+## 🚀 Current Status: Production Ready
+
+**✅ 664 Companies Identified** | **16,763 Jobs Processed** | **33 Active Search Terms**
 
 ## 🌟 Overview
 
@@ -17,13 +20,13 @@ Sales Tool Detector automates the discovery of companies using popular sales eng
 - **High-Quality Leads**: AI-powered detection with confidence scoring
 - **Export Ready**: One-click CSV exports for CRM integration  
 - **Real-time Intelligence**: Live dashboard with discovery notifications
-- **Cost Effective**: Uses GPT-4-mini for efficient analysis
+- **Cost Effective**: Uses GPT-5-mini for efficient analysis (NEVER GPT-4)
 
 ## 🚀 Features
 
 ### Core Functionality
 - **🔍 Smart Job Scraping**: Automated scraping from Indeed & LinkedIn
-- **🤖 AI-Powered Analysis**: OpenAI GPT-4-mini detects tool mentions
+- **🤖 AI-Powered Analysis**: OpenAI GPT-5-mini detects tool mentions (hardcoded, no fallbacks)
 - **📊 Real-time Dashboard**: Live stats and recent discoveries
 - **🎯 Advanced Filtering**: Filter by tool, confidence, date, location
 - **📤 Export Tools**: CSV/JSON export for CRM integration
@@ -52,7 +55,7 @@ Sales Tool Detector automates the discovery of companies using popular sales eng
 | **Database** | Supabase (PostgreSQL) | Data persistence and real-time features |
 | **UI Framework** | shadcn/ui + Tailwind CSS | Modern component library |
 | **Scraping** | Apify (Indeed & LinkedIn) | Reliable job data collection |
-| **AI Analysis** | OpenAI GPT-4-mini | Intelligent sales tool detection |
+| **AI Analysis** | OpenAI GPT-5-mini | Intelligent sales tool detection |
 | **Hosting** | Vercel | Production deployment |
 | **Authentication** | Supabase Auth | User management (future) |
 
@@ -66,8 +69,8 @@ Sales Tool Detector automates the discovery of companies using popular sales eng
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/eimribar/job-scraper.git
-cd job-scraper
+git clone https://github.com/eimribar/sales-tool-detector.git
+cd sales-tool-detector
 npm install
 ```
 
@@ -87,20 +90,25 @@ OPENAI_API_KEY=your_openai_api_key
 APIFY_TOKEN=your_apify_token
 
 # Application Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3001
+
+# CRITICAL: Use GPT-5-mini ONLY - NEVER GPT-4
+OPENAI_MODEL=gpt-5-mini-2025-08-07
 ```
 
 ### 3. Database Setup
 1. Create a new Supabase project
-2. Run the SQL schema from `supabase-schema.sql` in the SQL editor
-3. Verify tables are created successfully
+2. Run the SQL schema from `migrations/supabase-ready-schema.sql` in the SQL editor
+3. Run `migrations/import-schema-updates.sql` for additional fields
+4. Verify tables are created successfully
+5. (Optional) Import existing data using `scripts/import-google-sheets-data.js`
 
 ### 4. Development
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the application.
+Open [http://localhost:3001](http://localhost:3001) to see the application.
 
 ## 🚀 Deployment
 
@@ -241,6 +249,10 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - ✅ Dashboard with filtering
 - ✅ Export functionality
 - ✅ Production deployment
+- ✅ 664 companies imported from Google Sheets
+- ✅ Complete companies overview table with context
+- ✅ Advanced filtering and pagination
+- ✅ CSV/JSON export with filters
 
 ### 🚀 Near Term (v1.1)
 - [ ] Slack integration for notifications

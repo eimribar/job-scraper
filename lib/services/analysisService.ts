@@ -117,7 +117,7 @@ Job Title: ${job.job_title}
 Job Description: ${job.description}`;
 
     const response = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07', // ONLY use GPT-5-mini as specified by user
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }

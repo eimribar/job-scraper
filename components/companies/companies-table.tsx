@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Table,
   TableBody,
   TableCell,
@@ -20,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ExternalLink, Download, Search } from "lucide-react";
+import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 
 interface Company {
@@ -28,6 +34,7 @@ interface Company {
   company_name: string;
   tool_detected: string;
   signal_type: string;
+  context: string;
   confidence: string;
   job_title: string;
   job_url: string;
@@ -55,6 +62,7 @@ export function CompaniesTable({
   const [toolFilter, setToolFilter] = useState<string>('all');
   const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const itemsPerPage = 20;
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -112,6 +120,16 @@ export function CompaniesTable({
         {confidence.charAt(0).toUpperCase() + confidence.slice(1)}
       </Badge>
     );
+  };
+
+  const toggleRowExpansion = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
   };
 
   return (
@@ -193,6 +211,7 @@ export function CompaniesTable({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[30px]"></TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Tool</TableHead>
                 <TableHead>Signal</TableHead>
@@ -215,50 +234,96 @@ export function CompaniesTable({
                 </TableRow>
               ) : (
                 companies.map((company) => (
-                  <TableRow key={company.id}>
-                    <TableCell className="font-medium">
-                      {company.company_name}
-                    </TableCell>
-                    <TableCell>
-                      {getToolBadge(company.tool_detected)}
-                    </TableCell>
-                    <TableCell>
-                      {getSignalBadge(company.signal_type)}
-                    </TableCell>
-                    <TableCell>
-                      {getConfidenceBadge(company.confidence)}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate">
-                      {company.job_title}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {company.platform}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(company.identified_date), 'MMM d, yyyy')}
-                    </TableCell>
-                    <TableCell>
-                      {company.job_url && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          asChild
-                          className="h-8 w-8 p-0"
-                        >
-                          <a
-                            href={company.job_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View job posting"
+                  <>
+                    <TableRow key={company.id}>
+                      <TableCell>
+                        {company.context && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleRowExpansion(company.id)}
+                            className="h-8 w-8 p-0"
                           >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                            {expandedRows.has(company.id) ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {company.company_name}
+                      </TableCell>
+                      <TableCell>
+                        {getToolBadge(company.tool_detected)}
+                      </TableCell>
+                      <TableCell>
+                        {getSignalBadge(company.signal_type)}
+                      </TableCell>
+                      <TableCell>
+                        {getConfidenceBadge(company.confidence)}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help">{company.job_title || '-'}</span>
+                            </TooltipTrigger>
+                            {company.job_title && (
+                              <TooltipContent className="max-w-[300px]">
+                                <p>{company.job_title}</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {company.platform || 'Unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {company.identified_date ? format(new Date(company.identified_date), 'MMM d, yyyy') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {company.job_url && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            asChild
+                            className="h-8 w-8 p-0"
+                          >
+                            <a
+                              href={company.job_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View job posting"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    {expandedRows.has(company.id) && company.context && (
+                      <TableRow>
+                        <TableCell colSpan={9} className="bg-muted/50">
+                          <div className="p-4">
+                            <div className="flex items-start gap-2">
+                              <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                              <div className="space-y-2">
+                                <p className="font-medium text-sm">Detection Context:</p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                  {company.context}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))
               )}
             </TableBody>
