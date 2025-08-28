@@ -66,7 +66,8 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
     try {
       console.log('🔄 Refreshing identified companies cache...');
       
-      // Fetch all unique company names from identified_companies
+      // Fetch ALL unique company names from identified_companies
+      // Use DISTINCT to avoid duplicates
       const { data, error } = await this.supabase
         .from('identified_companies')
         .select('company_name');
@@ -80,11 +81,25 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
       this.identifiedCompaniesCache.clear();
       
       if (data && data.length > 0) {
+        // Use Set to automatically handle duplicates
+        const uniqueCompanies = new Set();
+        
         data.forEach(row => {
-          this.identifiedCompaniesCache.add(row.company_name.toLowerCase());
+          if (row.company_name) {
+            // Normalize: lowercase and trim
+            const normalized = row.company_name.toLowerCase().trim();
+            uniqueCompanies.add(normalized);
+            this.identifiedCompaniesCache.add(normalized);
+          }
         });
         
-        console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies`);
+        console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies from ${data.length} total rows`);
+        
+        // Log some sample companies for verification
+        const sample = Array.from(this.identifiedCompaniesCache).slice(0, 5);
+        console.log(`   Sample cached companies: ${sample.join(', ')}`);
+      } else {
+        console.log('⚠️ No companies found in database');
       }
       
       this.lastCacheUpdate = now;
@@ -94,7 +109,9 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
   }
 
   isCompanyAlreadyIdentified(companyName: string): boolean {
-    return this.identifiedCompaniesCache.has(companyName.toLowerCase());
+    // Normalize the company name before checking
+    const normalized = companyName.toLowerCase().trim();
+    return this.identifiedCompaniesCache.has(normalized);
   }
 
   async analyzeJobWithGPT(job: any): Promise<any> {
@@ -292,8 +309,10 @@ Job Description: ${job.description}`;
                 console.error('  ❌ Failed to save company:', companyError.message);
                 errors++;
               } else {
-                // Add to cache immediately
-                this.identifiedCompaniesCache.add(job.company.toLowerCase());
+                // Add to cache immediately with proper normalization
+                const normalized = job.company.toLowerCase().trim();
+                this.identifiedCompaniesCache.add(normalized);
+                console.log(`  📝 Added "${job.company}" to cache as "${normalized}"`);
               }
             }
           } else {
