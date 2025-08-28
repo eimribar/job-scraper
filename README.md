@@ -316,3 +316,4 @@ For enterprise deployments and custom features, contact [your-email@domain.com](
 [⭐ Star this repo](https://github.com/eimribar/job-scraper) • [🐛 Report Bug](https://github.com/eimribar/job-scraper/issues) • [🔧 Request Feature](https://github.com/eimribar/job-scraper/issues)
 
 </div>
+// Force rebuild Thu Aug 28 16:56:38 IDT 2025
