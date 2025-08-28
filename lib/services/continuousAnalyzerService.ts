@@ -286,7 +286,7 @@ Job Description: ${job.description}`;
               console.log(`  🎯 DETECTED: ${analysis.tool_detected} (${analysis.confidence} confidence)`);
               toolsFound++;
               
-              // Save to identified_companies
+              // Save to identified_companies with source tracking
               const { error: companyError } = await this.supabase
                 .from('identified_companies')
                 .upsert({
@@ -299,7 +299,9 @@ Job Description: ${job.description}`;
                   job_url: job.job_url,
                   linkedin_url: '',
                   platform: job.platform,
-                  identified_date: new Date().toISOString()
+                  identified_date: new Date().toISOString(),
+                  source: 'job_analysis',  // Mark as discovered from job analysis
+                  import_date: new Date().toISOString()  // Track when it was imported
                 }, { 
                   onConflict: 'company_name,tool_detected',
                   ignoreDuplicates: false 

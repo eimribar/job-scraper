@@ -181,36 +181,32 @@ export class DataService {
     offset: number = 0,
     tool?: string,
     confidence?: string,
-    search?: string
+    source?: string
   ): Promise<IdentifiedCompanyRow[]> {
     if (!this.isConfigured) {
       // Return empty array when not configured
       return [];
     }
+    // Use identified_companies table instead of old companies table
     let query = this.supabase
-      .from('companies')
+      .from('identified_companies')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('identified_date', { ascending: false })
       .range(offset, offset + limit - 1);
 
     // Filter by tool
     if (tool && tool !== 'all') {
-      if (tool === 'Outreach.io') {
-        query = query.eq('uses_outreach', true);
-      } else if (tool === 'SalesLoft') {
-        query = query.eq('uses_salesloft', true);
-      } else if (tool === 'Both') {
-        query = query.eq('uses_both', true);
-      }
+      query = query.eq('tool_detected', tool);
     }
 
+    // Filter by confidence
     if (confidence && confidence !== 'all') {
-      query = query.eq('detection_confidence', confidence);
+      query = query.eq('confidence', confidence);
     }
 
-    // Add search filter
-    if (search) {
-      query = query.ilike('name', `%${search}%`);
+    // Filter by source (google_sheets or job_analysis)
+    if (source) {
+      query = query.eq('source', source);
     }
 
     const { data, error } = await query;
@@ -220,45 +216,28 @@ export class DataService {
       throw error;
     }
 
-    // Map to expected format with all fields
-    return data?.map(c => ({
-      id: c.id,
-      company_name: c.name,
-      tool_detected: c.uses_both ? 'Both' : c.uses_outreach ? 'Outreach.io' : c.uses_salesloft ? 'SalesLoft' : 'none',
-      signal_type: c.signal_type || c.requirement_level || '',
-      context: c.context || '',
-      confidence: c.detection_confidence || 'low',
-      job_title: c.job_title || '',
-      job_url: c.job_url || '',
-      platform: c.platform || '',
-      identified_date: c.identified_date || c.created_at
-    })) || [];
+    // Data is already in the correct format for identified_companies table
+    return data || [];
   }
 
-  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string): Promise<number> {
+  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, source?: string): Promise<number> {
     if (!this.isConfigured) {
       return 0;
     }
     let query = this.supabase
-      .from('companies')
+      .from('identified_companies')
       .select('id', { count: 'exact', head: true });
 
     if (tool && tool !== 'all') {
-      if (tool === 'Outreach.io') {
-        query = query.eq('uses_outreach', true);
-      } else if (tool === 'SalesLoft') {
-        query = query.eq('uses_salesloft', true);
-      } else if (tool === 'Both') {
-        query = query.eq('uses_both', true);
-      }
+      query = query.eq('tool_detected', tool);
     }
 
     if (confidence && confidence !== 'all') {
-      query = query.eq('detection_confidence', confidence);
+      query = query.eq('confidence', confidence);
     }
 
-    if (search) {
-      query = query.ilike('name', `%${search}%`);
+    if (source) {
+      query = query.eq('source', source);
     }
 
     const { count, error } = await query;

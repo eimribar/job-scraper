@@ -11,14 +11,22 @@ export async function GET(request: NextRequest) {
     const tool = searchParams.get('tool') || undefined;
     const confidence = searchParams.get('confidence') || undefined;
     const search = searchParams.get('search') || undefined;
+    const source = searchParams.get('source') || undefined; // 'google_sheets', 'job_analysis', or undefined for all
+    const excludeGoogleSheets = searchParams.get('excludeGoogleSheets') === 'true';
     
     const offset = (page - 1) * limit;
 
     // Initialize data service
     const dataService = new DataService();
 
-    // Get companies with filters
-    let companies = await dataService.getIdentifiedCompanies(limit, offset, tool, confidence);
+    // Get companies with filters including source
+    let companies = await dataService.getIdentifiedCompanies(
+      limit, 
+      offset, 
+      tool, 
+      confidence,
+      excludeGoogleSheets ? 'job_analysis' : source
+    );
     
     // Apply search filter if provided (client-side for now, could be moved to database)
     if (search) {
@@ -29,8 +37,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get total count with same filters
-    const totalCount = await dataService.getIdentifiedCompaniesCount(tool, confidence);
+    // Get total count with same filters including source
+    const totalCount = await dataService.getIdentifiedCompaniesCount(
+      tool, 
+      confidence,
+      excludeGoogleSheets ? 'job_analysis' : source
+    );
 
     return NextResponse.json({
       success: true,
@@ -47,6 +59,8 @@ export async function GET(request: NextRequest) {
         tool,
         confidence,
         search,
+        source: excludeGoogleSheets ? 'job_analysis' : source,
+        excludeGoogleSheets,
       },
     });
 
