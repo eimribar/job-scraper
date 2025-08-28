@@ -276,6 +276,86 @@ export class WeeklyScraperService {
     }
   }
 
+  async processOneSearchTerm(): Promise<any> {
+    console.log('🎯 PROCESSING ONE SEARCH TERM (Hourly Cron)');
+    console.log('='.repeat(60));
+    
+    // Get the oldest search term that needs updating (>7 days old or never scraped)
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const { data: overdueTerms, error } = await this.supabase
+      .from('search_terms_clean')
+      .select('search_term, last_scraped_date')
+      .eq('is_active', true)
+      .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`)
+      .order('last_scraped_date', { ascending: true, nullsFirst: true })
+      .limit(1);
+    
+    if (error) {
+      console.error('❌ Error fetching overdue terms:', error);
+      throw error;
+    }
+    
+    if (!overdueTerms || overdueTerms.length === 0) {
+      console.log('✅ All search terms are up to date! No scraping needed.');
+      return {
+        success: true,
+        message: 'All search terms are up to date',
+        termsProcessed: 0
+      };
+    }
+    
+    const termToProcess = overdueTerms[0];
+    const daysSinceLastScrape = termToProcess.last_scraped_date 
+      ? Math.round((Date.now() - new Date(termToProcess.last_scraped_date).getTime()) / (1000 * 60 * 60 * 24))
+      : 'Never';
+    
+    console.log(`📌 Selected term: "${termToProcess.search_term}"`);
+    console.log(`   Last scraped: ${daysSinceLastScrape === 'Never' ? 'Never' : `${daysSinceLastScrape} days ago`}`);
+    console.log('');
+    
+    // Process this single search term
+    try {
+      const result = await this.scrapeSearchTerm(termToProcess.search_term);
+      
+      if (result.success) {
+        console.log('\n✅ HOURLY SCRAPING COMPLETE');
+        console.log(`   Term processed: "${termToProcess.search_term}"`);
+        console.log(`   Jobs scraped: ${result.totalScraped}`);
+        console.log(`   New jobs added: ${result.newJobs}`);
+        console.log(`   Duplicates found: ${result.duplicates}`);
+        
+        // Check how many terms still need processing
+        const { count: remainingTerms } = await this.supabase
+          .from('search_terms_clean')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);
+        
+        console.log(`   Remaining overdue terms: ${remainingTerms || 0}`);
+        
+        return {
+          success: true,
+          termProcessed: termToProcess.search_term,
+          jobsScraped: result.totalScraped,
+          newJobsAdded: result.newJobs,
+          remainingOverdueTerms: remainingTerms || 0
+        };
+      } else {
+        throw new Error(result.error || 'Scraping failed');
+      }
+      
+    } catch (error: any) {
+      console.error(`❌ Failed to process term "${termToProcess.search_term}":`, error.message);
+      return {
+        success: false,
+        termProcessed: termToProcess.search_term,
+        error: error.message
+      };
+    }
+  }
+
   getStatus() {
     return {
       isRunning: this.stats.isRunning,

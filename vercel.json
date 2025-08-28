@@ -9,12 +9,31 @@
     },
     "app/api/cron/weekly/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/scraper/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/analyzer/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/health-check/route.ts": {
+      "maxDuration": 60
     }
   },
-  "crons": [{
-    "path": "/api/cron/weekly",
-    "schedule": "0 2 * * 1"
-  }],
+  "crons": [
+    {
+      "path": "/api/cron/scraper",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/analyzer",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/health-check",
+      "schedule": "*/30 * * * *"
+    }
+  ],
   "env": {
     "NODE_ENV": "production"
   },

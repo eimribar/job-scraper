@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Check database connectivity
     const { data: dbTest, error: dbError } = await supabase
       .from('search_terms_clean')
-      .select('count(*)')
+      .select('*', { count: 'exact', head: true })
       .limit(1);
     
     if (dbError) {
