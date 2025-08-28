@@ -66,40 +66,47 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
     try {
       console.log('🔄 Refreshing identified companies cache...');
       
-      // Fetch ALL unique company names from identified_companies
-      // Use DISTINCT to avoid duplicates
-      const { data, error } = await this.supabase
-        .from('identified_companies')
-        .select('company_name');
+      // FIRST: Load the master never-analyze list if it exists
+      const fs = require('fs');
+      const masterListPath = '/Users/eimribar/sales-tool-detector/never-analyze-companies.json';
       
-      if (error) {
-        console.error('❌ Error fetching identified companies:', error);
-        return;
-      }
-
-      // Clear and rebuild cache
-      this.identifiedCompaniesCache.clear();
-      
-      if (data && data.length > 0) {
-        // Use Set to automatically handle duplicates
-        const uniqueCompanies = new Set();
+      if (fs.existsSync(masterListPath)) {
+        const masterList = JSON.parse(fs.readFileSync(masterListPath, 'utf-8'));
+        this.identifiedCompaniesCache.clear();
         
-        data.forEach(row => {
-          if (row.company_name) {
-            // Normalize: lowercase and trim
-            const normalized = row.company_name.toLowerCase().trim();
-            uniqueCompanies.add(normalized);
-            this.identifiedCompaniesCache.add(normalized);
-          }
+        // Load all companies from master list
+        masterList.companies.forEach((company: string) => {
+          this.identifiedCompaniesCache.add(company.toLowerCase().trim());
         });
         
-        console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies from ${data.length} total rows`);
-        
-        // Log some sample companies for verification
-        const sample = Array.from(this.identifiedCompaniesCache).slice(0, 5);
-        console.log(`   Sample cached companies: ${sample.join(', ')}`);
+        console.log(`✅ Loaded ${this.identifiedCompaniesCache.size} companies from master never-analyze list`);
+        console.log(`   Sources: ${masterList.sources.csv} from CSV, ${masterList.sources.database} from DB`);
       } else {
-        console.log('⚠️ No companies found in database');
+        // Fallback: Fetch from database
+        const { data, error } = await this.supabase
+          .from('identified_companies')
+          .select('company_name');
+        
+        if (error) {
+          console.error('❌ Error fetching identified companies:', error);
+          return;
+        }
+
+        // Clear and rebuild cache
+        this.identifiedCompaniesCache.clear();
+        
+        if (data && data.length > 0) {
+          data.forEach(row => {
+            if (row.company_name) {
+              const normalized = row.company_name.toLowerCase().trim();
+              this.identifiedCompaniesCache.add(normalized);
+            }
+          });
+          
+          console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies from database`);
+        } else {
+          console.log('⚠️ No companies found in database');
+        }
       }
       
       this.lastCacheUpdate = now;
@@ -244,7 +251,7 @@ Job Description: ${job.description}`;
         try {
           // CHECK IF COMPANY IS ALREADY IDENTIFIED
           if (this.isCompanyAlreadyIdentified(job.company)) {
-            console.log(`  ⏭️ SKIPPED: Company already identified in database`);
+            console.log(`  ⏭️ SKIPPED: ${job.company} - Already in database/CSV (cache has ${this.identifiedCompaniesCache.size} companies)`);
             skipped++;
             
             // Mark job as processed without analyzing
