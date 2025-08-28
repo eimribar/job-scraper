@@ -1,4 +1,5 @@
 import { ApifyClient } from 'apify-client';
+import { createHash } from 'crypto';
 
 export interface ScrapedJob {
   job_id: string;
@@ -51,17 +52,32 @@ export class ScraperService {
           jobUrl?: string;
         };
         
-        // Create consistent job ID based on company+title+location
-        // This ensures the same job always gets the same ID
-        const company = (jobItem.companyName || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const title = (jobItem.title || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const location = (jobItem.location || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Generate unique job ID
+        let jobId: string;
         
-        // Use LinkedIn ID if available, otherwise create deterministic ID
-        const consistentId = jobItem.id || `${company}_${title}_${location}`.substring(0, 50);
+        if (jobItem.id) {
+          // Use LinkedIn's provided ID if available
+          jobId = `linkedin_${jobItem.id}`;
+        } else {
+          // Create deterministic ID using MD5 hash of key fields
+          const company = (jobItem.companyName || 'unknown').trim();
+          const title = (jobItem.title || 'unknown').trim();
+          const location = (jobItem.location || 'unknown').trim();
+          
+          // Create a unique signature including more context
+          const signature = `${company}|${title}|${location}|${jobItem.jobUrl || ''}`;
+          const hash = createHash('md5').update(signature).digest('hex');
+          
+          // Use first 12 chars of hash for readability
+          jobId = `linkedin_gen_${hash.substring(0, 12)}`;
+          
+          console.log(`  Generated ID for ${company} - ${title}:`);
+          console.log(`    Signature: ${signature.substring(0, 80)}...`);
+          console.log(`    Job ID: ${jobId}`);
+        }
         
         return {
-          job_id: `linkedin_${consistentId}`,
+          job_id: jobId,
           platform: 'LinkedIn',
           company: jobItem.companyName || '',
           job_title: jobItem.title || '',

@@ -55,21 +55,43 @@ export class JobProcessor {
       const scrapedJobs = await this.scraperService.scrapeJobs(searchTerm, maxItems);
       stats.totalScraped = scrapedJobs.length;
       console.log(`✅ Scraped ${stats.totalScraped} jobs`);
+      
+      // Debug: Log first 3 scraped jobs
+      console.log('\n📋 Sample of scraped jobs:');
+      scrapedJobs.slice(0, 3).forEach((job, idx) => {
+        console.log(`  Job ${idx + 1}:`);
+        console.log(`    ID: ${job.job_id}`);
+        console.log(`    Company: ${job.company}`);
+        console.log(`    Title: ${job.job_title}`);
+      });
 
       // Step 2: Check each job ID against database (deduplication)
-      console.log('🔍 Checking for new jobs...');
+      console.log('\n🔍 Checking for new jobs (deduplication)...');
+      console.log(`  Total jobs to check: ${scrapedJobs.length}`);
       const newJobs = [];
       const duplicateJobs = [];
       
+      let checkCount = 0;
       for (const job of scrapedJobs) {
-        console.log(`  Checking job: ${job.job_id} - ${job.company} - ${job.job_title}`);
+        checkCount++;
+        if (checkCount <= 5 || checkCount % 50 === 0) {
+          console.log(`\n  [${checkCount}/${scrapedJobs.length}] Checking: ${job.job_id}`);
+          console.log(`    Company: ${job.company}`);
+          console.log(`    Title: ${job.job_title}`);
+        }
+        
         const exists = await this.dataService.jobExists(job.job_id);
+        
         if (!exists) {
           newJobs.push(job);
-          console.log(`    ✅ NEW job: ${job.job_id}`);
+          if (checkCount <= 5) {
+            console.log(`    ✅ NEW job will be saved`);
+          }
         } else {
           duplicateJobs.push(job);
-          console.log(`    ⏭️  DUPLICATE job: ${job.job_id}`);
+          if (checkCount <= 5) {
+            console.log(`    ⏭️  DUPLICATE (already in DB)`);
+          }
         }
       }
       
@@ -97,7 +119,14 @@ export class JobProcessor {
             const analyzedJob = await this.analysisService.analyzeJob(job);
             
             // Save to database
-            await this.dataService.saveJobs([job]);
+            console.log(`    Saving job ${job.job_id} to database...`);
+            try {
+              await this.dataService.saveJobs([job]);
+              console.log(`    ✅ Job saved successfully`);
+            } catch (saveError) {
+              console.error(`    ❌ Failed to save job ${job.job_id}:`, saveError);
+              throw saveError;
+            }
             
             // Save analysis result if tool detected
             if (analyzedJob.analysis.uses_tool) {

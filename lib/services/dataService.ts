@@ -23,33 +23,45 @@ export class DataService {
 
   // Jobs management
   async saveJobs(jobs: ScrapedJob[]): Promise<void> {
-    if (jobs.length === 0) return;
+    if (jobs.length === 0) {
+      console.log('saveJobs: No jobs to save (empty array)');
+      return;
+    }
+    
+    console.log(`\nsaveJobs: Attempting to save ${jobs.length} job(s) to database`);
+    jobs.forEach((job, idx) => {
+      console.log(`  [${idx + 1}] Job ID: ${job.job_id} | ${job.company} - ${job.job_title}`);
+    });
 
+    const dataToInsert = jobs.map(job => ({
+      job_type: 'analyze',
+      status: 'pending',
+      payload: {
+        job_id: job.job_id,
+        platform: job.platform,
+        company: job.company,
+        job_title: job.job_title,
+        location: job.location,
+        description: job.description,
+        job_url: job.job_url,
+        scraped_date: job.scraped_date,
+        search_term: job.search_term,
+      },
+      created_at: job.scraped_date,
+    }));
+    
+    console.log('  Inserting into job_queue table...');
     const { error } = await this.supabase
       .from('job_queue')
-      .insert(
-        jobs.map(job => ({
-          job_type: 'analyze',
-          status: 'pending',
-          payload: {
-            job_id: job.job_id,
-            platform: job.platform,
-            company: job.company,
-            job_title: job.job_title,
-            location: job.location,
-            description: job.description,
-            job_url: job.job_url,
-            scraped_date: job.scraped_date,
-            search_term: job.search_term,
-          },
-          created_at: job.scraped_date,
-        }))
-      );
+      .insert(dataToInsert);
 
     if (error) {
-      console.error('Error saving jobs:', error);
+      console.error('❌ Error saving jobs to database:');
+      console.error('  Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
+    
+    console.log(`  ✅ Successfully saved ${jobs.length} job(s) to database\n`);
   }
 
   async getUnprocessedJobs(limit: number = 100): Promise<JobRow[]> {
@@ -341,7 +353,7 @@ export class DataService {
 
   // Check if a specific job ID already exists
   async jobExists(jobId: string): Promise<boolean> {
-    // Use a proper SQL query to check if job exists without loading all jobs
+    // First attempt: Use proper SQL query
     const { data, error } = await this.supabase
       .from('job_queue')
       .select('id')
@@ -349,23 +361,26 @@ export class DataService {
       .limit(1);
 
     if (error) {
-      console.error('Error checking job existence for job_id:', jobId, error);
-      // Fallback to checking in-memory if the JSON query doesn't work
+      console.log(`  ⚠️ SQL query failed for job_id: ${jobId}, using fallback...`);
+      
+      // Fallback: Load all jobs and check in-memory
       const { data: fallbackData, error: fallbackError } = await this.supabase
         .from('job_queue')
         .select('id, payload');
       
       if (fallbackError) {
-        console.error('Fallback check also failed:', fallbackError);
+        console.error('  ❌ Fallback check also failed:', fallbackError);
         return false;
       }
       
-      // Check ALL jobs, not just first 1000
-      return fallbackData?.some(job => job.payload?.job_id === jobId) || false;
+      const exists = fallbackData?.some(job => job.payload?.job_id === jobId) || false;
+      console.log(`  Fallback result for ${jobId}: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
+      console.log(`  Total jobs checked: ${fallbackData?.length || 0}`);
+      return exists;
     }
 
-    // If we found any results, the job exists
-    return (data && data.length > 0);
+    const exists = (data && data.length > 0);
+    return exists;
   }
 
   async getKnownCompanies(): Promise<string[]> {
