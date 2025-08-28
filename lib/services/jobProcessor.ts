@@ -59,16 +59,25 @@ export class JobProcessor {
       // Step 2: Check each job ID against database (deduplication)
       console.log('🔍 Checking for new jobs...');
       const newJobs = [];
+      const duplicateJobs = [];
       
       for (const job of scrapedJobs) {
+        console.log(`  Checking job: ${job.job_id} - ${job.company} - ${job.job_title}`);
         const exists = await this.dataService.jobExists(job.job_id);
         if (!exists) {
           newJobs.push(job);
+          console.log(`    ✅ NEW job: ${job.job_id}`);
+        } else {
+          duplicateJobs.push(job);
+          console.log(`    ⏭️  DUPLICATE job: ${job.job_id}`);
         }
       }
       
       stats.newJobs = newJobs.length;
-      console.log(`📊 Found ${stats.newJobs} new jobs (${stats.totalScraped - stats.newJobs} duplicates)`);
+      console.log(`📊 Found ${stats.newJobs} new jobs (${duplicateJobs.length} duplicates)`);
+      if (duplicateJobs.length > 0) {
+        console.log(`  Sample duplicates: ${duplicateJobs.slice(0, 3).map(j => j.company).join(', ')}`);
+      }
 
       // Step 3: Process each NEW job ONE AT A TIME
       if (stats.newJobs > 0) {

@@ -51,8 +51,17 @@ export class ScraperService {
           jobUrl?: string;
         };
         
+        // Create consistent job ID based on company+title+location
+        // This ensures the same job always gets the same ID
+        const company = (jobItem.companyName || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const title = (jobItem.title || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const location = (jobItem.location || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // Use LinkedIn ID if available, otherwise create deterministic ID
+        const consistentId = jobItem.id || `${company}_${title}_${location}`.substring(0, 50);
+        
         return {
-          job_id: `linkedin_${jobItem.id || Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          job_id: `linkedin_${consistentId}`,
           platform: 'LinkedIn',
           company: jobItem.companyName || '',
           job_title: jobItem.title || '',

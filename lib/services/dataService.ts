@@ -341,18 +341,31 @@ export class DataService {
 
   // Check if a specific job ID already exists
   async jobExists(jobId: string): Promise<boolean> {
+    // Use a proper SQL query to check if job exists without loading all jobs
     const { data, error } = await this.supabase
       .from('job_queue')
-      .select('id, payload')
-      .limit(1000);
+      .select('id')
+      .eq('payload->>job_id', jobId)
+      .limit(1);
 
     if (error) {
-      console.error('Error checking job existence:', error);
-      return false;
+      console.error('Error checking job existence for job_id:', jobId, error);
+      // Fallback to checking in-memory if the JSON query doesn't work
+      const { data: fallbackData, error: fallbackError } = await this.supabase
+        .from('job_queue')
+        .select('id, payload');
+      
+      if (fallbackError) {
+        console.error('Fallback check also failed:', fallbackError);
+        return false;
+      }
+      
+      // Check ALL jobs, not just first 1000
+      return fallbackData?.some(job => job.payload?.job_id === jobId) || false;
     }
 
-    // Check in memory if any job has this job_id
-    return data?.some(job => job.payload?.job_id === jobId) || false;
+    // If we found any results, the job exists
+    return (data && data.length > 0);
   }
 
   async getKnownCompanies(): Promise<string[]> {
