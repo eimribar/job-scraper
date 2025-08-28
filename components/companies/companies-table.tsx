@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -64,6 +64,23 @@ export function CompaniesTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'new' | 'imported'>('all');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [stats, setStats] = useState({
+    total: 0,
+    newDiscoveries: 0,
+    googleSheets: 0
+  });
+  
+  // Fetch stats dynamically
+  useEffect(() => {
+    fetch('/api/companies/stats')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setStats(data.stats);
+        }
+      })
+      .catch(err => console.error('Failed to fetch stats:', err));
+  }, []);
 
   const itemsPerPage = 20;
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -202,10 +219,10 @@ export function CompaniesTable({
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-green-600 border-green-200">
-                  119 New
+                  107 New
                 </Badge>
                 <Badge variant="outline" className="text-blue-600 border-blue-200">
-                  677 Imported
+                  690 Imported
                 </Badge>
               </div>
             </div>
@@ -221,7 +238,7 @@ export function CompaniesTable({
                 className="min-w-[120px]"
               >
                 All Companies
-                <Badge variant="secondary" className="ml-2">796</Badge>
+                <Badge variant="secondary" className="ml-2">{stats.total || totalCount}</Badge>
               </Button>
               
               <Button
@@ -235,7 +252,7 @@ export function CompaniesTable({
               >
                 <Sparkles className="h-4 w-4 mr-2" />
                 New Discoveries
-                <Badge variant="secondary" className="ml-2">119</Badge>
+                <Badge variant="secondary" className="ml-2">{stats.newDiscoveries}</Badge>
               </Button>
               
               <Button
@@ -248,7 +265,7 @@ export function CompaniesTable({
                 className="min-w-[140px]"
               >
                 Google Sheets
-                <Badge variant="secondary" className="ml-2">677</Badge>
+                <Badge variant="secondary" className="ml-2">{stats.googleSheets}</Badge>
               </Button>
             </div>
           </div>
