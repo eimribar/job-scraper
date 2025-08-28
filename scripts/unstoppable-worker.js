@@ -34,15 +34,28 @@ Return JSON: uses_tool, tool_detected, confidence, context`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `${job.payload.company}\n${job.payload.job_title}\n${job.payload.description?.substring(0, 2000)}` }
       ],
-      max_tokens: 200,
-      temperature: 0
+      max_completion_tokens: 300,  // GPT-5 requires this
+      reasoning_effort: 'low'  // Use low reasoning effort for efficiency
     });
-    return JSON.parse(response.choices[0].message.content);
+    
+    const result = response.choices[0].message.content?.trim();
+    if (!result) return null;
+    
+    try {
+      return JSON.parse(result);
+    } catch (parseError) {
+      return {
+        uses_tool: false,
+        tool_detected: "None",
+        confidence: "low",
+        context: "Parse error"
+      };
+    }
   } catch (error) {
     return null;
   }

@@ -33,6 +33,8 @@ IMPORTANT: ONLY detect Outreach.io or SalesLoft. IGNORE Salesforce, HubSpot, etc
 Return JSON:
 - uses_tool: boolean (true ONLY if Outreach.io or SalesLoft detected)
 - tool_detected: "Outreach.io", "SalesLoft", "Both", or "None"
+- signal_type: "explicit_mention", "integration_requirement", "process_indicator", or "none"
+- requirement_level: "required", "preferred", "mentioned", or "none"
 - confidence: "high", "medium", or "low"
 - context: relevant quote (max 200 chars)`;
 
@@ -44,19 +46,47 @@ Return ONLY valid JSON.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 200,
-      temperature: 0
+      max_completion_tokens: 500,  // Increased for GPT-5
+      reasoning_effort: 'low'  // Use low reasoning effort for efficiency
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    const result = response.choices[0].message.content?.trim();
+    
+    if (!result || result.length === 0) {
+      console.log(`    ❌ Empty response for ${job.payload.company}`);
+      return null;
+    }
+    
+    // Try to parse JSON, with fallback
+    try {
+      return JSON.parse(result);
+    } catch (parseError) {
+      console.log(`    ❌ Invalid JSON for ${job.payload.company}:`, result.substring(0, 100));
+      return {
+        uses_tool: false,
+        tool_detected: "None",
+        signal_type: "none",
+        requirement_level: "none",
+        confidence: "low",
+        context: "Failed to parse analysis"
+      };
+    }
+    
   } catch (error) {
     console.error(`Error analyzing ${job.payload.company}:`, error.message);
-    return null;
+    return {
+      uses_tool: false,
+      tool_detected: "None",
+      signal_type: "none",
+      requirement_level: "none",
+      confidence: "low",
+      context: "API error"
+    };
   }
 }
 
@@ -215,7 +245,11 @@ async function syncCompaniesToDashboard() {
         uses_outreach: false,
         uses_salesloft: false,
         confidence: 'low',
-        contexts: []
+        contexts: [],
+        job_title: job.payload?.job_title || '',
+        job_url: job.payload?.job_url || '',
+        signal_type: analysis.signal_type || 'none',
+        requirement_level: analysis.requirement_level || 'none'
       });
     }
     
@@ -233,6 +267,25 @@ async function syncCompaniesToDashboard() {
     }
     if (analysis.context) {
       data.contexts.push(analysis.context);
+    }
+    
+    // Update signal_type and requirement_level if higher priority
+    const signalPriority = { 'explicit_mention': 3, 'integration_requirement': 2, 'process_indicator': 1, 'none': 0 };
+    const reqPriority = { 'required': 3, 'preferred': 2, 'mentioned': 1, 'none': 0 };
+    
+    if (signalPriority[analysis.signal_type] > signalPriority[data.signal_type]) {
+      data.signal_type = analysis.signal_type;
+    }
+    if (reqPriority[analysis.requirement_level] > reqPriority[data.requirement_level]) {
+      data.requirement_level = analysis.requirement_level;
+    }
+    
+    // Use the most recent job details if current ones are empty
+    if (!data.job_title && job.payload?.job_title) {
+      data.job_title = job.payload.job_title;
+    }
+    if (!data.job_url && job.payload?.job_url) {
+      data.job_url = job.payload.job_url;
     }
   });
   
@@ -255,7 +308,13 @@ async function syncCompaniesToDashboard() {
         .update({
           uses_outreach: data.uses_outreach,
           uses_salesloft: data.uses_salesloft,
-          detection_confidence: data.confidence
+          uses_both: data.uses_outreach && data.uses_salesloft,
+          detection_confidence: data.confidence,
+          job_title: data.job_title,
+          job_url: data.job_url,
+          signal_type: data.signal_type,
+          requirement_level: data.requirement_level,
+          context: data.contexts[0] || ''
         })
         .eq('id', existing.id);
       updated++;
@@ -270,6 +329,10 @@ async function syncCompaniesToDashboard() {
           uses_both: data.uses_outreach && data.uses_salesloft,
           detection_confidence: data.confidence,
           context: data.contexts[0] || '',
+          job_title: data.job_title,
+          job_url: data.job_url,
+          signal_type: data.signal_type,
+          requirement_level: data.requirement_level,
           platform: 'LinkedIn',
           identified_date: new Date().toISOString()
         });

@@ -46,10 +46,9 @@ async function testSingleAnalysis() {
   console.log(`  Ready for analysis: ${job.payload.ready_for_analysis}`);
   console.log(`  Already analyzed: ${job.payload.analyzed}\n`);
   
-  if (job.payload.analyzed === true) {
-    console.log('This job was already analyzed. Skipping.');
-    return;
-  }
+  // Force re-analysis for testing
+  console.log('Forcing re-analysis with GPT-5-mini...');
+  job.payload.analyzed = false;
   
   console.log('Analyzing job with GPT-3.5...\n');
   
@@ -74,19 +73,25 @@ Return only valid JSON.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 500,
-      temperature: 0
+      max_completion_tokens: 500,  // GPT-5 requires this parameter
+      reasoning_effort: 'low'  // Use low reasoning effort for efficiency
     });
 
     const result = response.choices[0].message.content;
     console.log('Raw GPT response:');
     console.log(result);
+    console.log('Response length:', result?.length);
     console.log();
+    
+    if (!result || result.length === 0) {
+      console.error('Empty response from GPT-5!');
+      return;
+    }
     
     const analysis = JSON.parse(result);
     

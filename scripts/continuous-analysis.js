@@ -36,6 +36,7 @@ Analyze the job description and return a JSON response with:
 - uses_tool: boolean (true ONLY if Outreach.io or SalesLoft is detected)
 - tool_detected: string ("Outreach.io", "SalesLoft", "Both", or "None")
 - signal_type: string ("explicit_mention", "integration_requirement", "process_indicator", or "none")
+- requirement_level: string ("required", "preferred", "mentioned", or "none")
 - confidence: string ("high", "medium", or "low")
 - context: string (relevant quote from job description, max 200 chars)
 
@@ -59,22 +60,49 @@ Return only valid JSON.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',  // Using GPT-3.5 for now since GPT-5-mini isn't available
+      model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 500,
-      temperature: 0
+      max_completion_tokens: 500,  // GPT-5 requires this
+      reasoning_effort: 'low'  // Use low reasoning effort for efficiency
     });
 
-    const result = response.choices[0].message.content;
-    const analysis = JSON.parse(result);
+    const result = response.choices[0].message.content?.trim();
     
-    return analysis;
+    if (!result || result.length === 0) {
+      throw new Error('Empty response from GPT-5');
+    }
+    
+    // Parse JSON with better error handling
+    try {
+      const analysis = JSON.parse(result);
+      return analysis;
+    } catch (parseError) {
+      console.error(`  ❌ JSON parse error for ${job.payload.company}:`, result.substring(0, 100));
+      // Return default analysis instead of throwing
+      return {
+        uses_tool: false,
+        tool_detected: "None",
+        signal_type: "none",
+        requirement_level: "none",
+        confidence: "low",
+        context: "Failed to parse analysis"
+      };
+    }
+    
   } catch (error) {
     console.error(`  ❌ Analysis error for ${job.payload.company}:`, error.message);
-    throw error;
+    // Return default analysis instead of throwing
+    return {
+      uses_tool: false,
+      tool_detected: "None",
+      signal_type: "none",
+      requirement_level: "none",
+      confidence: "low",
+      context: "API error: " + error.message.substring(0, 50)
+    };
   }
 }
 
@@ -117,36 +145,67 @@ async function processNextBatch() {
         job.payload.analysis_date = new Date().toISOString();
         job.payload.analysis_result = analysis;
         
-        // If tool detected, save to identified_companies
+        // If tool detected, save/update in companies table
         if (analysis.uses_tool) {
           stats.toolsDetected++;
           if (analysis.tool_detected === 'Outreach.io' || analysis.tool_detected === 'SalesLoft' || analysis.tool_detected === 'Both') {
-          console.log(`    🎯 DETECTED: ${analysis.tool_detected} (${analysis.confidence} confidence)`);
-        } else {
-          console.log(`    ❌ Wrong tool detected: ${analysis.tool_detected} - IGNORING`);
-          // Don't count this as a tool detection
-          stats.toolsDetected--;
-          analysis.uses_tool = false;
-          analysis.tool_detected = 'None';
-        }
-          
-          // Save to identified_companies table (if it exists)
-          const { error: saveError } = await supabase
-            .from('identified_companies')
-            .insert({
-              company_name: job.payload.company,
-              tool_detected: analysis.tool_detected,
-              signal_type: analysis.signal_type,
-              context: analysis.context,
-              confidence: analysis.confidence,
+            console.log(`    🎯 DETECTED: ${analysis.tool_detected} (${analysis.confidence} confidence)`);
+            
+            // Check if company already exists
+            const { data: existingCompany } = await supabase
+              .from('companies')
+              .select('id')
+              .eq('name', job.payload.company)
+              .single();
+            
+            const companyData = {
+              uses_outreach: analysis.tool_detected === 'Outreach.io' || analysis.tool_detected === 'Both',
+              uses_salesloft: analysis.tool_detected === 'SalesLoft' || analysis.tool_detected === 'Both',
+              uses_both: analysis.tool_detected === 'Both',
+              detection_confidence: analysis.confidence,
               job_title: job.payload.job_title,
               job_url: job.payload.job_url,
-              platform: job.payload.platform,
+              signal_type: analysis.signal_type || 'explicit_mention',
+              requirement_level: analysis.requirement_level || 'mentioned',
+              context: analysis.context,
+              platform: job.payload.platform || 'LinkedIn',
               identified_date: new Date().toISOString()
-            });
-          
-          if (saveError && !saveError.message.includes('not found')) {
-            console.error('    Failed to save to identified_companies:', saveError.message);
+            };
+            
+            if (existingCompany) {
+              // Update existing company
+              const { error: updateError } = await supabase
+                .from('companies')
+                .update(companyData)
+                .eq('id', existingCompany.id);
+              
+              if (updateError) {
+                console.error('    Failed to update company:', updateError.message);
+              } else {
+                console.log(`    ✅ Updated existing company in database`);
+              }
+            } else {
+              // Insert new company
+              const { error: insertError } = await supabase
+                .from('companies')
+                .insert({
+                  name: job.payload.company,
+                  ...companyData
+                });
+              
+              if (insertError) {
+                console.error('    Failed to insert company:', insertError.message);
+              } else {
+                console.log(`    ✅ Added new company to database`);
+              }
+            }
+            
+          } else {
+            console.log(`    ❌ Wrong tool detected: ${analysis.tool_detected} - IGNORING`);
+            // Don't count this as a tool detection
+            stats.toolsDetected--;
+            analysis.uses_tool = false;
+            analysis.tool_detected = 'None';
           }
         } else {
           console.log(`    ✓ No tools detected`);
