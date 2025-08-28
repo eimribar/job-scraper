@@ -134,12 +134,12 @@ async function checkIfTimeForWeeklyScrape() {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   
-  // Check when we last scraped any search term
+  // Check when we last scraped any search term (get OLDEST, not newest)
   const { data: lastScrape } = await supabase
     .from('search_terms')
     .select('last_scraped_date')
     .not('last_scraped_date', 'is', null)
-    .order('last_scraped_date', { ascending: false })
+    .order('last_scraped_date', { ascending: true })
     .limit(1);
   
   if (!lastScrape || lastScrape.length === 0) {

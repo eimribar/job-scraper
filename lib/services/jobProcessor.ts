@@ -101,50 +101,31 @@ export class JobProcessor {
         console.log(`  Sample duplicates: ${duplicateJobs.slice(0, 3).map(j => j.company).join(', ')}`);
       }
 
-      // Step 3: Process each NEW job ONE AT A TIME
+      // Step 3: Save all NEW jobs marked as ready for analysis
       if (stats.newJobs > 0) {
-        console.log('🤖 Starting sequential analysis...');
+        console.log('💾 Saving jobs to database for analysis...');
         
-        for (let i = 0; i < newJobs.length; i++) {
-          const job = newJobs[i];
-          const jobNumber = i + 1;
-          
-          try {
-            // Progress indicator
-            if (jobNumber % 10 === 0 || jobNumber === 1 || jobNumber === stats.newJobs) {
-              console.log(`  Processing job ${jobNumber}/${stats.newJobs} (${Math.round(jobNumber/stats.newJobs * 100)}%)`);
+        try {
+          // Save all new jobs in batches
+          const batchSize = 50;
+          for (let i = 0; i < newJobs.length; i += batchSize) {
+            const batch = newJobs.slice(i, i + batchSize);
+            await this.dataService.saveJobsReadyForAnalysis(batch);
+            console.log(`  ✅ Saved batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(newJobs.length/batchSize)} (${batch.length} jobs)`);
+            
+            // Small delay between batches
+            if (i + batchSize < newJobs.length) {
+              await this.delay(100);
             }
-
-            // Analyze single job with OpenAI
-            const analyzedJob = await this.analysisService.analyzeJob(job);
-            
-            // Save to database
-            console.log(`    Saving job ${job.job_id} to database...`);
-            try {
-              await this.dataService.saveJobs([job]);
-              console.log(`    ✅ Job saved successfully`);
-            } catch (saveError) {
-              console.error(`    ❌ Failed to save job ${job.job_id}:`, saveError);
-              throw saveError;
-            }
-            
-            // Save analysis result if tool detected
-            if (analyzedJob.analysis.uses_tool) {
-              await this.dataService.saveIdentifiedCompany(analyzedJob);
-              console.log(`  🎯 Tool detected: ${analyzedJob.company} uses ${analyzedJob.analysis.tool_detected}`);
-            }
-            
-            stats.analyzed++;
-            
-            // Rate limit delay (1 second between API calls)
-            await this.delay(1000);
-            
-          } catch (error) {
-            console.error(`  ❌ Error processing job ${job.job_id}:`, error);
-            stats.failed++;
-            // Continue to next job
-            continue;
           }
+          
+          stats.analyzed = newJobs.length; // All jobs are ready for analysis
+          console.log(`📊 Successfully saved ${newJobs.length} jobs ready for analysis`);
+          
+        } catch (saveError) {
+          console.error('❌ Failed to save jobs:', saveError);
+          stats.failed = newJobs.length;
+          throw saveError;
         }
       }
 

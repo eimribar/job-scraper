@@ -22,6 +22,46 @@ export class DataService {
   }
 
   // Jobs management
+  async saveJobsReadyForAnalysis(jobs: ScrapedJob[]): Promise<void> {
+    if (jobs.length === 0) {
+      console.log('saveJobsReadyForAnalysis: No jobs to save (empty array)');
+      return;
+    }
+    
+    console.log(`saveJobsReadyForAnalysis: Attempting to save ${jobs.length} job(s) marked as ready for analysis`);
+    
+    const dataToInsert = jobs.map(job => ({
+      job_type: 'analyze',
+      status: 'pending',
+      payload: {
+        job_id: job.job_id,
+        platform: job.platform,
+        company: job.company,
+        job_title: job.job_title,
+        location: job.location,
+        description: job.description,
+        job_url: job.job_url,
+        scraped_date: job.scraped_date,
+        search_term: job.search_term,
+        ready_for_analysis: true,  // This is the key flag!
+        analyzed: false,
+      },
+      created_at: job.scraped_date,
+    }));
+    
+    const { error } = await this.supabase
+      .from('job_queue')
+      .insert(dataToInsert);
+
+    if (error) {
+      console.error('❌ Error saving jobs ready for analysis:');
+      console.error('  Error details:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+    
+    console.log(`  ✅ Successfully saved ${jobs.length} job(s) ready for analysis`);
+  }
+
   async saveJobs(jobs: ScrapedJob[]): Promise<void> {
     if (jobs.length === 0) {
       console.log('saveJobs: No jobs to save (empty array)');
@@ -351,36 +391,25 @@ export class DataService {
     return data?.map(job => job.id) || [];
   }
 
-  // Check if a specific job ID already exists
+  // Check if a specific job ID already exists - OPTIMIZED VERSION
   async jobExists(jobId: string): Promise<boolean> {
-    // First attempt: Use proper SQL query
-    const { data, error } = await this.supabase
-      .from('job_queue')
-      .select('id')
-      .eq('payload->>job_id', jobId)
-      .limit(1);
-
-    if (error) {
-      console.log(`  ⚠️ SQL query failed for job_id: ${jobId}, using fallback...`);
-      
-      // Fallback: Load all jobs and check in-memory
-      const { data: fallbackData, error: fallbackError } = await this.supabase
+    try {
+      // Use count query for efficiency - doesn't load actual data
+      const { count, error } = await this.supabase
         .from('job_queue')
-        .select('id, payload');
-      
-      if (fallbackError) {
-        console.error('  ❌ Fallback check also failed:', fallbackError);
-        return false;
-      }
-      
-      const exists = fallbackData?.some(job => job.payload?.job_id === jobId) || false;
-      console.log(`  Fallback result for ${jobId}: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
-      console.log(`  Total jobs checked: ${fallbackData?.length || 0}`);
-      return exists;
-    }
+        .select('id', { count: 'exact', head: true })
+        .eq('payload->>job_id', jobId);
 
-    const exists = (data && data.length > 0);
-    return exists;
+      if (error) {
+        console.log(`  ⚠️ Optimized query failed for job_id: ${jobId}, error:`, error.message);
+        return false; // Assume doesn't exist if query fails
+      }
+
+      return (count && count > 0);
+    } catch (error) {
+      console.error(`  ❌ Error checking job existence: ${error}`);
+      return false; // Assume doesn't exist if error occurs
+    }
   }
 
   async getKnownCompanies(): Promise<string[]> {

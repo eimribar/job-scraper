@@ -59,7 +59,9 @@ ${job.payload.description?.substring(0, 4000) || 'No description available'}
 Return only valid JSON.`;
 
   try {
-    const response = await openai.chat.completions.create({
+    // Add timeout protection (30 seconds) and rate limiting delay
+    const timeoutMs = 30 * 1000;
+    const apiPromise = openai.chat.completions.create({
       model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
       messages: [
         { role: 'system', content: systemPrompt },
@@ -68,6 +70,13 @@ Return only valid JSON.`;
       max_completion_tokens: 500,  // GPT-5 requires this
       reasoning_effort: 'low'  // Use low reasoning effort for efficiency
     });
+    
+    const response = await Promise.race([
+      apiPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`OpenAI API timeout after ${timeoutMs/1000}s`)), timeoutMs)
+      )
+    ]);
 
     const result = response.choices[0].message.content?.trim();
     

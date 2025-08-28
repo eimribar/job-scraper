@@ -1,5 +1,8 @@
-import { DataService } from "@/lib/services/dataService";
+import { DataService } from "@/lib/services/dataService-new";
 import { CompaniesClient } from "./companies-client";
+
+// Enable real-time data updates by disabling Next.js caching
+export const dynamic = 'force-dynamic';
 
 interface CompaniesPageProps {
   searchParams: {

@@ -31,7 +31,10 @@ export class ScraperService {
     try {
       console.log(`Scraping LinkedIn for: ${searchTerm} (max ${maxItems} jobs)`);
       
-      const run = await this.apifyClient.actor('bebity~linkedin-jobs-scraper').call({
+      // Add timeout protection (2 minutes for scraping)
+      const timeoutMs = 2 * 60 * 1000; // 2 minutes
+      
+      const runPromise = this.apifyClient.actor('bebity~linkedin-jobs-scraper').call({
         proxy: {
           useApifyProxy: true,
           apifyProxyGroups: [], // Standard proxy as per requirements
@@ -39,6 +42,13 @@ export class ScraperService {
         rows: maxItems,
         title: searchTerm,
       });
+      
+      const run = await Promise.race([
+        runPromise,
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error(`LinkedIn scraping timeout after ${timeoutMs/1000}s`)), timeoutMs)
+        )
+      ]);
 
       const { items } = await this.apifyClient.dataset(run.defaultDatasetId).listItems();
       

@@ -89,7 +89,10 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
 Job Title: ${job.job_title}
 Job Description: ${job.description}`;
 
-    const response = await this.openai.chat.completions.create({
+    // Add timeout protection for OpenAI API call (30 seconds)
+    const timeoutMs = 30 * 1000; // 30 seconds
+    
+    const apiPromise = this.openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07', // Using GPT-5-mini as configured
       messages: [
         { role: 'system', content: systemPrompt },
@@ -98,6 +101,13 @@ Job Description: ${job.description}`;
       // temperature: 0, // GPT-5-mini only supports default temperature (1)
       max_completion_tokens: 2000, // Much higher for GPT-5-mini reasoning + output tokens
     });
+    
+    const response = await Promise.race([
+      apiPromise,
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`OpenAI API timeout after ${timeoutMs/1000}s`)), timeoutMs)
+      )
+    ]);
 
     console.log('OpenAI Response:', {
       model: response.model,
