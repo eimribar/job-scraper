@@ -1,4 +1,4 @@
-import { DataService } from "@/lib/services/dataService-new";
+import { DataService } from "@/lib/services/dataService";
 import { CompaniesClient } from "./companies-client";
 
 // Enable real-time data updates by disabling Next.js caching

@@ -26,9 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles, X, Filter, Home, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 
 interface Company {
@@ -64,20 +62,31 @@ export function CompaniesTable({
   const [toolFilter, setToolFilter] = useState<string>('all');
   const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showOnlyNew, setShowOnlyNew] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'new' | 'imported'>('all');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const itemsPerPage = 20;
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-  const handleFilterChange = () => {
+  const handleFilterChange = (newSourceFilter?: 'all' | 'new' | 'imported') => {
+    const filterToUse = newSourceFilter !== undefined ? newSourceFilter : sourceFilter;
     onFilterChange({
       tool: toolFilter === 'all' ? undefined : toolFilter,
       confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
       search: searchTerm || undefined,
-      excludeGoogleSheets: showOnlyNew,
+      excludeGoogleSheets: filterToUse === 'new',
     });
   };
+
+  const clearAllFilters = () => {
+    setToolFilter('all');
+    setConfidenceFilter('all');
+    setSearchTerm('');
+    setSourceFilter('all');
+    onFilterChange({});
+  };
+
+  const hasActiveFilters = toolFilter !== 'all' || confidenceFilter !== 'all' || searchTerm || sourceFilter !== 'all';
 
   const getToolBadge = (tool: string) => {
     if (tool === 'Outreach.io') {
@@ -137,51 +146,112 @@ export function CompaniesTable({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <CardTitle className="flex items-center gap-2">
-            Companies Using Sales Tools
-            <Badge variant="secondary" className="ml-2">
-              {totalCount} total
-            </Badge>
-          </CardTitle>
-          <Button onClick={onExport} variant="outline" size="sm" className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
-        </div>
-        
-        {/* New Discoveries Toggle */}
-        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950/20 dark:to-blue-950/20 rounded-lg border border-green-200 dark:border-green-800 mt-4">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="new-discoveries"
-              checked={showOnlyNew}
-              onCheckedChange={(checked) => {
-                setShowOnlyNew(checked);
-                onFilterChange({
-                  tool: toolFilter === 'all' ? undefined : toolFilter,
-                  confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
-                  search: searchTerm || undefined,
-                  excludeGoogleSheets: checked,
-                });
-              }}
-            />
-            <Label 
-              htmlFor="new-discoveries" 
-              className="flex items-center gap-2 cursor-pointer font-medium"
-            >
-              <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />
-              Show only NEW discoveries (117 companies)
-            </Label>
-          </div>
-          {showOnlyNew && (
-            <Badge variant="default" className="bg-green-600 text-white">
-              Excluding 677 Google Sheets imports
-            </Badge>
+    <div className="space-y-4">
+      {/* Navigation Bar */}
+      <div className="flex items-center justify-between p-4 bg-background border-b">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <a href="/" className="flex items-center gap-1 hover:text-foreground transition-colors">
+            <Home className="h-4 w-4" />
+            <span>Dashboard</span>
+          </a>
+          <ChevronRight className="h-4 w-4" />
+          <span className="text-foreground font-medium">Companies</span>
+          {sourceFilter !== 'all' && (
+            <>
+              <ChevronRight className="h-4 w-4" />
+              <span className="text-foreground">
+                {sourceFilter === 'new' ? 'New Discoveries' : 'Google Sheets Import'}
+              </span>
+            </>
           )}
         </div>
+        {hasActiveFilters && (
+          <Button 
+            onClick={clearAllFilters}
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4 mr-2" />
+            Clear all filters
+          </Button>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <CardTitle className="flex items-center gap-2">
+              Companies Using Sales Tools
+              <Badge variant="secondary" className="ml-2">
+                {totalCount} total
+              </Badge>
+            </CardTitle>
+            <Button onClick={onExport} variant="outline" size="sm" className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
+          
+          {/* Professional Filter Buttons */}
+          <div className="space-y-4 mt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Data Source</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-green-600 border-green-200">
+                  119 New
+                </Badge>
+                <Badge variant="outline" className="text-blue-600 border-blue-200">
+                  677 Imported
+                </Badge>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={sourceFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setSourceFilter('all');
+                  handleFilterChange('all');
+                }}
+                className="min-w-[120px]"
+              >
+                All Companies
+                <Badge variant="secondary" className="ml-2">796</Badge>
+              </Button>
+              
+              <Button
+                variant={sourceFilter === 'new' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setSourceFilter('new');
+                  handleFilterChange('new');
+                }}
+                className="min-w-[140px]"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                New Discoveries
+                <Badge variant="secondary" className="ml-2">119</Badge>
+              </Button>
+              
+              <Button
+                variant={sourceFilter === 'imported' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setSourceFilter('imported');
+                  handleFilterChange('imported');
+                }}
+                className="min-w-[140px]"
+              >
+                Google Sheets
+                <Badge variant="secondary" className="ml-2">677</Badge>
+              </Button>
+            </div>
+          </div>
         
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mt-4">
@@ -204,7 +274,7 @@ export function CompaniesTable({
               tool: value === 'all' ? undefined : value,
               confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
               search: searchTerm || undefined,
-              excludeGoogleSheets: showOnlyNew,
+              excludeGoogleSheets: sourceFilter === 'new',
             });
           }}>
             <SelectTrigger className="w-[180px]">
@@ -223,7 +293,7 @@ export function CompaniesTable({
               tool: toolFilter === 'all' ? undefined : toolFilter,
               confidence: value === 'all' ? undefined : value,
               search: searchTerm || undefined,
-              excludeGoogleSheets: showOnlyNew,
+              excludeGoogleSheets: sourceFilter === 'new',
             });
           }}>
             <SelectTrigger className="w-[180px]">
@@ -237,9 +307,6 @@ export function CompaniesTable({
             </SelectContent>
           </Select>
 
-          <Button onClick={handleFilterChange}>
-            Apply Filters
-          </Button>
         </div>
       </CardHeader>
       
@@ -419,5 +486,6 @@ export function CompaniesTable({
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }
