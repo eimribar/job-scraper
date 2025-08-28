@@ -1,4 +1,4 @@
-const { ApifyClient } = require('apify-client');
+import { ApifyClient } from 'apify-client';
 
 export interface ScrapedJob {
   job_id: string;

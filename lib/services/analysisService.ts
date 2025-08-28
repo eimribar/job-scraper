@@ -75,13 +75,14 @@ NOT valid (just general sales terms):
 - "outreach efforts"
 - "customer outreach"
 
-Analyze the job description and return ONLY this JSON:
+You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSON object:
+
 {
-  "uses_tool": true/false,
-  "tool_detected": "Outreach.io" or "SalesLoft" or "none",
-  "signal_type": "required" or "preferred" or "stack_mention" or "none",
+  "uses_tool": true,
+  "tool_detected": "Outreach.io",
+  "signal_type": "required",
   "context": "exact quote mentioning the tool",
-  "confidence": "high" or "medium" or "low"
+  "confidence": "high"
 }`;
 
     const userPrompt = `Company: ${job.company}
@@ -95,11 +96,18 @@ Job Description: ${job.description}`;
         { role: 'user', content: userPrompt }
       ],
       // temperature: 0, // GPT-5-mini only supports default temperature (1)
-      max_completion_tokens: 500, // Changed from max_tokens for GPT-5-mini compatibility
+      max_completion_tokens: 2000, // Much higher for GPT-5-mini reasoning + output tokens
+    });
+
+    console.log('OpenAI Response:', {
+      model: response.model,
+      choices: response.choices?.length || 0,
+      content: response.choices[0]?.message?.content?.substring(0, 100) + '...'
     });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
+      console.error('OpenAI Response Debug:', JSON.stringify(response, null, 2));
       throw new Error('No response from OpenAI');
     }
 

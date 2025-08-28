@@ -1,0 +1,21 @@
+# Production Environment Variables for Vercel
+# Copy these to Vercel Dashboard: Settings → Environment Variables
+
+OPENAI_API_KEY=[YOUR_OPENAI_API_KEY]
+
+APIFY_TOKEN=[YOUR_APIFY_TOKEN]
+
+NEXT_PUBLIC_SUPABASE_URL=https://adbcghllcrmcbdunwras.supabase.co
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkYmNnaGxsY3JtY2JkdW53cmFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyMDc3NTksImV4cCI6MjA3MTc4Mzc1OX0.4xRHM7fokLsFqybYOh-i1eZ77azy0zABTwuF7SqRHCs
+
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkYmNnaGxsY3JtY2JkdW53cmFzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjIwNzc1OSwiZXhwIjoyMDcxNzgzNzU5fQ.dgli1Evn02KlEoES6xF05FW71M4AsR4kFBOGpD_ZQoM
+
+OPENAI_MODEL=gpt-5-mini-2025-08-07
+
+NODE_ENV=production
+
+CRON_SECRET=2d19c51c0acb34b9c2ab5f06f22719cf5f67d82c8ea18accdc13ee10aa684b8a
+
+# Will be updated after deployment:
+NEXT_PUBLIC_APP_URL=https://your-vercel-domain.vercel.app

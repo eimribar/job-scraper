@@ -1,0 +1,22 @@
+{
+  "buildCommand": "npm run build",
+  "functions": {
+    "app/api/scrape/trigger/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/scrape/weekly/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/weekly/route.ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [{
+    "path": "/api/cron/weekly",
+    "schedule": "0 2 * * 1"
+  }],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "regions": ["iad1"]
+}

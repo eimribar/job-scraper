@@ -28,11 +28,16 @@ export async function GET(req: NextRequest) {
       '30d': '30 days'
     };
 
-    const { data: aggregatedMetrics } = await supabase
-      .from('metrics')
-      .select('*')
-      .gte('bucket_time', new Date(Date.now() - parsePeriod(periodMap[period as keyof typeof periodMap] || '1 hour')).toISOString())
-      .order('bucket_time', { ascending: false });
+    let aggregatedMetrics = null;
+    
+    if (supabase) {
+      const { data } = await supabase
+        .from('metrics')
+        .select('*')
+        .gte('bucket_time', new Date(Date.now() - parsePeriod(periodMap[period as keyof typeof periodMap] || '1 hour')).toISOString())
+        .order('bucket_time', { ascending: false });
+      aggregatedMetrics = data;
+    }
 
     // Calculate summary statistics
     const summary = calculateSummary(aggregatedMetrics || []);

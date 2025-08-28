@@ -29,7 +29,7 @@ export function createApiSupabaseClient() {
 export function createServerSupabaseClient() {
   if (!hasValidConfig) {
     // Return a mock client that won't cause errors
-    return null as any;
+    return null;
   }
   
   return createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -49,7 +49,7 @@ export function createServerSupabaseClient() {
 // For client-side operations
 export function createClientSupabaseClient() {
   if (!hasValidConfig) {
-    return null as any;
+    return null;
   }
   
   return createBrowserClient(supabaseUrl!, supabaseAnonKey!)

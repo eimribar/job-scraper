@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -234,8 +234,8 @@ export function CompaniesTable({
                 </TableRow>
               ) : (
                 companies.map((company) => (
-                  <>
-                    <TableRow key={company.id}>
+                  <React.Fragment key={company.id}>
+                    <TableRow>
                       <TableCell>
                         {company.context && (
                           <Button
@@ -323,7 +323,7 @@ export function CompaniesTable({
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))
               )}
             </TableBody>
