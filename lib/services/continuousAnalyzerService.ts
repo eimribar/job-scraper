@@ -4,10 +4,14 @@ import OpenAI from 'openai';
 export class ContinuousAnalyzerService {
   private supabase;
   private openai;
+  private identifiedCompaniesCache: Set<string> = new Set();
+  private lastCacheUpdate: number = 0;
+  private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private stats = {
     totalAnalyzed: 0,
     toolsDetected: 0,
     errors: 0,
+    skippedAlreadyIdentified: 0,
     isRunning: false
   };
 
@@ -50,6 +54,48 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
   "context": "exact quote mentioning the tool",
   "confidence": "high"
 }`;
+
+  async refreshCompaniesCache(): Promise<void> {
+    const now = Date.now();
+    
+    // Only refresh if cache is older than TTL
+    if (now - this.lastCacheUpdate < this.CACHE_TTL && this.identifiedCompaniesCache.size > 0) {
+      return;
+    }
+
+    try {
+      console.log('🔄 Refreshing identified companies cache...');
+      
+      // Fetch all unique company names from identified_companies
+      const { data, error } = await this.supabase
+        .from('identified_companies')
+        .select('company_name');
+      
+      if (error) {
+        console.error('❌ Error fetching identified companies:', error);
+        return;
+      }
+
+      // Clear and rebuild cache
+      this.identifiedCompaniesCache.clear();
+      
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          this.identifiedCompaniesCache.add(row.company_name.toLowerCase());
+        });
+        
+        console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies`);
+      }
+      
+      this.lastCacheUpdate = now;
+    } catch (error) {
+      console.error('❌ Failed to refresh companies cache:', error);
+    }
+  }
+
+  isCompanyAlreadyIdentified(companyName: string): boolean {
+    return this.identifiedCompaniesCache.has(companyName.toLowerCase());
+  }
 
   async analyzeJobWithGPT(job: any): Promise<any> {
     const userPrompt = `Company: ${job.company}
@@ -138,6 +184,9 @@ Job Description: ${job.description}`;
     this.stats.isRunning = true;
     
     try {
+      // Refresh the companies cache before processing
+      await this.refreshCompaniesCache();
+      
       // Fetch unprocessed jobs from clean raw_jobs table
       const { data: jobs, error } = await this.supabase
         .from('raw_jobs')
@@ -157,7 +206,8 @@ Job Description: ${job.description}`;
           success: true, 
           message: 'No jobs to process',
           jobsProcessed: 0,
-          toolsDetected: 0
+          toolsDetected: 0,
+          skippedAlreadyIdentified: 0
         };
       }
       
@@ -165,16 +215,49 @@ Job Description: ${job.description}`;
       
       let processed = 0;
       let toolsFound = 0;
+      let skipped = 0;
       let errors = 0;
       
       // Process jobs sequentially to avoid overwhelming OpenAI
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         
-        console.log(`[${i+1}/${jobs.length}] Analyzing: ${job.company} - ${job.job_title}`);
+        console.log(`[${i+1}/${jobs.length}] Checking: ${job.company} - ${job.job_title}`);
         
         try {
-          // Analyze with GPT-5
+          // CHECK IF COMPANY IS ALREADY IDENTIFIED
+          if (this.isCompanyAlreadyIdentified(job.company)) {
+            console.log(`  ⏭️ SKIPPED: Company already identified in database`);
+            skipped++;
+            
+            // Mark job as processed without analyzing
+            const { error: updateError } = await this.supabase
+              .from('raw_jobs')
+              .update({ 
+                processed: true,
+                processed_date: new Date().toISOString()
+              })
+              .eq('job_id', job.job_id);
+            
+            if (updateError) {
+              console.error('  ❌ Failed to mark job as processed:', updateError.message);
+              errors++;
+            } else {
+              await this.supabase
+                .from('processed_jobs')
+                .upsert({ 
+                  job_id: job.job_id, 
+                  processed_date: new Date().toISOString() 
+                }, { onConflict: 'job_id' });
+              
+              processed++;
+            }
+            
+            continue; // Skip to next job
+          }
+          
+          // Company not identified yet, analyze with GPT-5
+          console.log(`  🔍 Analyzing with GPT-5...`);
           const analysis = await this.analyzeJobWithGPT(job);
           
           if (analysis.uses_tool) {
@@ -208,6 +291,9 @@ Job Description: ${job.description}`;
               if (companyError) {
                 console.error('  ❌ Failed to save company:', companyError.message);
                 errors++;
+              } else {
+                // Add to cache immediately
+                this.identifiedCompaniesCache.add(job.company.toLowerCase());
               }
             }
           } else {
@@ -249,10 +335,12 @@ Job Description: ${job.description}`;
       
       this.stats.totalAnalyzed += processed;
       this.stats.toolsDetected += toolsFound;
+      this.stats.skippedAlreadyIdentified += skipped;
       this.stats.errors += errors;
       
       console.log('\n✅ BATCH COMPLETE');
-      console.log(`   Jobs analyzed: ${processed}/${jobs.length}`);
+      console.log(`   Jobs processed: ${processed}/${jobs.length}`);
+      console.log(`   Skipped (already identified): ${skipped}`);
       console.log(`   Tools detected: ${toolsFound}`);
       console.log(`   Errors: ${errors}`);
       
@@ -267,6 +355,7 @@ Job Description: ${job.description}`;
       return {
         success: true,
         jobsProcessed: processed,
+        skippedAlreadyIdentified: skipped,
         toolsDetected: toolsFound,
         errors: errors,
         remainingUnprocessed: remaining || 0
@@ -291,7 +380,9 @@ Job Description: ${job.description}`;
       isRunning: this.stats.isRunning,
       totalAnalyzed: this.stats.totalAnalyzed,
       toolsDetected: this.stats.toolsDetected,
-      errors: this.stats.errors
+      skippedAlreadyIdentified: this.stats.skippedAlreadyIdentified,
+      errors: this.stats.errors,
+      cachedCompanies: this.identifiedCompaniesCache.size
     };
   }
 }
