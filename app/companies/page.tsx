@@ -10,6 +10,7 @@ interface CompaniesPageProps {
     tool?: string;
     confidence?: string;
     search?: string;
+    excludeGoogleSheets?: string;
   };
 }
 
@@ -21,14 +22,16 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
   const tool = searchParams.tool;
   const confidence = searchParams.confidence;
   const search = searchParams.search;
+  const excludeGoogleSheets = searchParams.excludeGoogleSheets === 'true';
+  const source = excludeGoogleSheets ? 'job_analysis' : undefined;
   
   const itemsPerPage = 20;
   const offset = (currentPage - 1) * itemsPerPage;
   
   // Fetch companies and count
   const [companies, totalCount] = await Promise.all([
-    dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, confidence, search),
-    dataService.getIdentifiedCompaniesCount(tool, confidence, search)
+    dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, confidence, source),
+    dataService.getIdentifiedCompaniesCount(tool, confidence, source)
   ]);
   
   return (

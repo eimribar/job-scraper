@@ -26,7 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 
 interface Company {
@@ -47,7 +49,7 @@ interface CompaniesTableProps {
   totalCount: number;
   currentPage: number;
   onPageChange: (page: number) => void;
-  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string }) => void;
+  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean }) => void;
   onExport: () => void;
 }
 
@@ -62,6 +64,7 @@ export function CompaniesTable({
   const [toolFilter, setToolFilter] = useState<string>('all');
   const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const itemsPerPage = 20;
@@ -72,6 +75,7 @@ export function CompaniesTable({
       tool: toolFilter === 'all' ? undefined : toolFilter,
       confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
       search: searchTerm || undefined,
+      excludeGoogleSheets: showOnlyNew,
     });
   };
 
@@ -148,6 +152,37 @@ export function CompaniesTable({
           </Button>
         </div>
         
+        {/* New Discoveries Toggle */}
+        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950/20 dark:to-blue-950/20 rounded-lg border border-green-200 dark:border-green-800 mt-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="new-discoveries"
+              checked={showOnlyNew}
+              onCheckedChange={(checked) => {
+                setShowOnlyNew(checked);
+                onFilterChange({
+                  tool: toolFilter === 'all' ? undefined : toolFilter,
+                  confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
+                  search: searchTerm || undefined,
+                  excludeGoogleSheets: checked,
+                });
+              }}
+            />
+            <Label 
+              htmlFor="new-discoveries" 
+              className="flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />
+              Show only NEW discoveries (117 companies)
+            </Label>
+          </div>
+          {showOnlyNew && (
+            <Badge variant="default" className="bg-green-600 text-white">
+              Excluding 677 Google Sheets imports
+            </Badge>
+          )}
+        </div>
+        
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mt-4">
           <div className="flex-1">
@@ -169,6 +204,7 @@ export function CompaniesTable({
               tool: value === 'all' ? undefined : value,
               confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
               search: searchTerm || undefined,
+              excludeGoogleSheets: showOnlyNew,
             });
           }}>
             <SelectTrigger className="w-[180px]">
@@ -187,6 +223,7 @@ export function CompaniesTable({
               tool: toolFilter === 'all' ? undefined : toolFilter,
               confidence: value === 'all' ? undefined : value,
               search: searchTerm || undefined,
+              excludeGoogleSheets: showOnlyNew,
             });
           }}>
             <SelectTrigger className="w-[180px]">
@@ -206,19 +243,19 @@ export function CompaniesTable({
         </div>
       </CardHeader>
       
-      <CardContent>
-        <div className="rounded-md border">
+      <CardContent className="p-0 sm:p-6">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[30px]"></TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Tool</TableHead>
-                <TableHead>Signal</TableHead>
-                <TableHead>Confidence</TableHead>
-                <TableHead>Job Title</TableHead>
-                <TableHead>Platform</TableHead>
-                <TableHead>Discovered</TableHead>
+                <TableHead className="w-[30px] hidden sm:table-cell"></TableHead>
+                <TableHead className="min-w-[150px]">Company</TableHead>
+                <TableHead className="min-w-[100px]">Tool</TableHead>
+                <TableHead className="hidden md:table-cell">Signal</TableHead>
+                <TableHead className="hidden lg:table-cell">Confidence</TableHead>
+                <TableHead className="hidden xl:table-cell">Job Title</TableHead>
+                <TableHead className="hidden sm:table-cell">Platform</TableHead>
+                <TableHead className="hidden sm:table-cell">Discovered</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -235,8 +272,8 @@ export function CompaniesTable({
               ) : (
                 companies.map((company) => (
                   <React.Fragment key={company.id}>
-                    <TableRow>
-                      <TableCell>
+                    <TableRow className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="hidden sm:table-cell">
                         {company.context && (
                           <Button
                             variant="ghost"
@@ -253,18 +290,24 @@ export function CompaniesTable({
                         )}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {company.company_name}
+                        <div className="flex flex-col gap-1">
+                          {company.company_name}
+                          <div className="flex gap-2 md:hidden">
+                            {getSignalBadge(company.signal_type)}
+                            {getConfidenceBadge(company.confidence)}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         {getToolBadge(company.tool_detected)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {getSignalBadge(company.signal_type)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {getConfidenceBadge(company.confidence)}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
+                      <TableCell className="max-w-[200px] truncate hidden xl:table-cell">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -278,12 +321,12 @@ export function CompaniesTable({
                           </Tooltip>
                         </TooltipProvider>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline" className="text-xs">
                           {company.platform || 'Unknown'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
                         {company.identified_date ? format(new Date(company.identified_date), 'MMM d, yyyy') : '-'}
                       </TableCell>
                       <TableCell>

@@ -23,11 +23,12 @@ export function CompaniesClient({
 }: CompaniesClientProps) {
   const router = useRouter();
   
-  const handleFilterChange = (filters: { tool?: string; confidence?: string; search?: string }) => {
+  const handleFilterChange = (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean }) => {
     const params = new URLSearchParams();
     if (filters.tool) params.set('tool', filters.tool);
     if (filters.confidence) params.set('confidence', filters.confidence);
     if (filters.search) params.set('search', filters.search);
+    if (filters.excludeGoogleSheets) params.set('excludeGoogleSheets', 'true');
     params.set('page', '1');
     
     router.push(`/companies?${params.toString()}`);
