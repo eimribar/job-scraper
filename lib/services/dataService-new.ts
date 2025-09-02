@@ -177,7 +177,7 @@ export class DataService {
 
     // Add search filter
     if (search) {
-      query = query.ilike('company_name', `%${search}%`);
+      query = query.ilike('company', `%${search}%`);
     }
 
     const { data, error } = await query;
@@ -190,7 +190,7 @@ export class DataService {
     // Map to expected dashboard format
     return data?.map(c => ({
       id: c.id,
-      company_name: c.company_name,
+      company_name: c.company,  // Fixed: using 'company' field
       tool_detected: c.tool_detected,
       signal_type: c.signal_type,
       context: c.context,
@@ -287,7 +287,7 @@ export class DataService {
       // Get total companies by tool
       const { data: companies, error: companiesError } = await this.supabase
         .from('identified_companies')
-        .select('company_name, tool_detected, identified_date');
+        .select('company, tool_detected, identified_date');
 
       if (companiesError) throw companiesError;
 
@@ -301,23 +301,29 @@ export class DataService {
 
       const { data: recentCompanies, error: recentError } = await this.supabase
         .from('identified_companies')
-        .select('company_name, tool_detected, identified_date')
+        .select('company, tool_detected, identified_date')
         .gte('identified_date', yesterday.toISOString())
         .order('identified_date', { ascending: false })
         .limit(10);
 
       if (recentError) throw recentError;
 
-      const recentDiscoveries = recentCompanies || [];
+      // Map recent discoveries to expected format
+      const recentDiscoveries = (recentCompanies || []).map(company => ({
+        company_name: company.company,  // Map 'company' to 'company_name'
+        tool_detected: company.tool_detected,
+        identified_date: company.identified_date
+      }));
 
       // Get total jobs processed today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
       const { count: jobsProcessedToday, error: jobsError } = await this.supabase
-        .from('processed_jobs')
+        .from('raw_jobs')
         .select('job_id', { count: 'exact', head: true })
-        .gte('processed_date', today.toISOString());
+        .eq('processed', true)
+        .gte('analyzed_date', today.toISOString());
 
       if (jobsError) throw jobsError;
 
@@ -329,7 +335,11 @@ export class DataService {
         jobsProcessedToday: jobsProcessedToday || 0,
       };
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
+      console.error('Error fetching dashboard stats - Full error:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   }

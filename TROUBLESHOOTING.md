@@ -1,46 +1,96 @@
-# 🔧 Troubleshooting Guide
+# 🔧 Troubleshooting Guide - Sales Tool Detector
 
-> **Common issues and solutions for Sales Tool Detector**
+> **Common issues and solutions with today's fixes**
 
-## 🚨 Quick Fixes
+## 🚨 Critical Issues (Fixed September 2, 2025)
 
-### 1. Application Won't Start
+### 1. Schema Mismatch - CONFIDENCE FIELD (FIXED)
 
-**Error**: `TypeError: Invalid URL`
+**Error**: `Could not find the 'confidence' column of 'identified_companies'`
 
-**Solution**:
-```bash
-# Check your .env.local file
-cp .env.local.example .env.local
+**Root Cause**: Database doesn't have a confidence field
 
-# Ensure Supabase URL is properly formatted
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co  # ✅ Correct
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url         # ❌ Wrong
+**Solution Applied**:
+```javascript
+// ❌ OLD CODE - Remove this
+const data = {
+  confidence: analysis.confidence,  // DELETE THIS LINE
+  ...
+}
+
+// ✅ NEW CODE - Use this
+const data = {
+  company: job.company,
+  tool_detected: analysis.tool_detected,
+  signal_type: analysis.signal_type,
+  context: analysis.context,
+  // NO confidence field!
+}
 ```
 
-**Error**: `npm run dev` fails
+### 2. Upsert Errors - NO UNIQUE CONSTRAINT (FIXED)
 
-**Solution**:
-```bash
-# Clear node modules and reinstall
-rm -rf node_modules
-rm package-lock.json
-npm install
+**Error**: `there is no unique or exclusion constraint matching the ON CONFLICT specification`
 
-# Check Node.js version (requires 18+)
-node --version
+**Root Cause**: Database missing unique constraint on (company, tool_detected)
+
+**Solution Applied**:
+```javascript
+// ❌ OLD CODE - Don't use this
+await supabase.from('identified_companies').upsert(data, {
+  onConflict: 'company,tool_detected'  // Constraint doesn't exist!
+});
+
+// ✅ NEW CODE - Check existence first
+const { data: existing } = await supabase
+  .from('identified_companies')
+  .select('id')
+  .eq('company', job.company)
+  .eq('tool_detected', analysis.tool_detected)
+  .single();
+
+if (existing) {
+  await supabase.from('identified_companies').update(data).eq('id', existing.id);
+} else {
+  await supabase.from('identified_companies').insert(data);
+}
 ```
 
-### 2. Database Connection Issues
+**Permanent Fix** (Run in Supabase SQL Editor):
+```sql
+ALTER TABLE identified_companies
+ADD CONSTRAINT unique_company_tool 
+UNIQUE (company, tool_detected);
+```
 
-**Error**: Database queries fail
+### 3. GPT-5 API Configuration (CRITICAL)
 
-**Solution**:
-```bash
-# Verify Supabase connection
-# 1. Check if your Supabase project is active
-# 2. Verify API keys in .env.local
-# 3. Test connection in Supabase dashboard
+**MUST USE GPT-5 RESPONSES API - NOT CHAT COMPLETIONS!**
+
+```javascript
+// ❌ WRONG - This will fail
+const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  model: 'gpt-4o-mini',  // WRONG MODEL!
+  messages: [...]        // WRONG API!
+});
+
+// ✅ CORRECT - Use this exactly
+const response = await fetch('https://api.openai.com/v1/responses', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${OPENAI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'gpt-5-mini',  // MUST BE GPT-5!
+    input: prompt,
+    reasoning: { effort: 'minimal' },
+    text: { verbosity: 'low' }
+  })
+});
+
+// Parse response correctly
+const data = await response.json();
+const result = data.output[1].content[0].text;  // Specific structure!
 ```
 
 ### 3. API Scraping Failures
