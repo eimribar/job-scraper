@@ -6,19 +6,24 @@
 
 import { RawJob, AnalysisResult } from '@/types';
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GPT5_MODEL = 'gpt-5'; // ONLY USE GPT-5
-
-if (!OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY is not configured');
-}
 
 export class GPT5AnalysisService {
   private apiKey: string;
   private model: string = 'gpt-5-mini'; // Use mini for faster/cheaper processing
 
   constructor() {
-    this.apiKey = OPENAI_API_KEY!;
+    // Defer initialization to avoid build-time errors
+    this.apiKey = process.env.OPENAI_API_KEY || '';
+  }
+  
+  private ensureApiKey() {
+    if (!this.apiKey) {
+      this.apiKey = process.env.OPENAI_API_KEY || '';
+      if (!this.apiKey) {
+        throw new Error('OPENAI_API_KEY is not configured');
+      }
+    }
   }
 
   /**
@@ -26,6 +31,7 @@ export class GPT5AnalysisService {
    * NEVER use Chat Completions API or other models
    */
   async analyzeJob(job: RawJob): Promise<AnalysisResult> {
+    this.ensureApiKey();
     const prompt = this.buildPrompt(job);
     
     try {

@@ -22,19 +22,40 @@ export interface AnalyzedJob {
 }
 
 export class DataService {
-  private supabase: any;
+  private _supabase: any;
   private isConfigured: boolean;
 
   constructor() {
     try {
-      this.supabase = createApiSupabaseClient();
-      this.isConfigured = true;
+      this._supabase = createApiSupabaseClient();
+      this.isConfigured = !!this._supabase;
     } catch (error) {
-      console.error('Failed to initialize Supabase client:', error);
-      this.isConfigured = false;
-      // Create a mock client to prevent crashes
-      this.supabase = null;
+      // During build time, this is expected
+      if (process.env.NODE_ENV !== 'production' || process.env.BUILDING) {
+        this._supabase = null;
+        this.isConfigured = false;
+      } else {
+        console.error('Failed to initialize Supabase client:', error);
+        this.isConfigured = false;
+        this._supabase = null;
+      }
     }
+  }
+  
+  // Getter that ensures client is initialized before use
+  private get supabase() {
+    if (!this._supabase && !this.isConfigured) {
+      try {
+        this._supabase = createApiSupabaseClient();
+        this.isConfigured = !!this._supabase;
+      } catch (error) {
+        throw new Error('Supabase is not configured. Please check your environment variables.');
+      }
+    }
+    if (!this._supabase) {
+      throw new Error('Supabase client is not available');
+    }
+    return this._supabase;
   }
 
   // ================================================

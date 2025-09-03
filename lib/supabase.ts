@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { createBrowserClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 
 // Support both naming conventions for Vercel deployment
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_SUPABASE_URL
@@ -18,6 +17,10 @@ const hasValidConfig = supabaseUrl &&
 // For API routes - simple client without SSR/cookies
 export function createApiSupabaseClient() {
   if (!hasValidConfig) {
+    // Return null during build time
+    if (typeof window === 'undefined' && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return null;
+    }
     throw new Error('Supabase configuration is missing');
   }
   
@@ -33,14 +36,17 @@ export function createServerSupabaseClient() {
     return null;
   }
   
+  // Lazy load cookies to avoid build-time issues
+  const { cookies: nextCookies } = require('next/headers');
+  
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
-        return cookies().getAll()
+        return nextCookies().getAll()
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) =>
-          cookies().set(name, value, options)
+          nextCookies().set(name, value, options)
         )
       },
     },

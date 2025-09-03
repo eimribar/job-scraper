@@ -26,16 +26,39 @@ export class ContinuousProcessor {
   private lastActivityAt: Date | null = null;
 
   constructor() {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Defer initialization to avoid build-time errors
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    
+    if (supabaseUrl && supabaseKey) {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+    } else {
+      // Create a dummy client during build time
+      this.supabase = null as any;
+    }
+    
     this.analyzer = gpt5AnalysisService;
+  }
+  
+  private ensureInitialized() {
+    if (!this.supabase) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration is missing');
+      }
+      
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+    }
   }
 
   /**
    * Start the continuous processor
    */
   async start(): Promise<void> {
+    this.ensureInitialized();
+    
     if (this.isRunning) {
       console.log('Processor is already running');
       return;
@@ -360,5 +383,20 @@ export class ContinuousProcessor {
   }
 }
 
-// Export singleton instance
-export const continuousProcessor = new ContinuousProcessor();
+// Export singleton instance with lazy initialization
+let _instance: ContinuousProcessor | null = null;
+
+export const continuousProcessor = {
+  get instance() {
+    if (!_instance) {
+      _instance = new ContinuousProcessor();
+    }
+    return _instance;
+  },
+  
+  // Proxy methods to the instance
+  start: () => continuousProcessor.instance.start(),
+  stop: () => continuousProcessor.instance.stop(),
+  getStatus: () => continuousProcessor.instance.getStatus(),
+  getStats: () => continuousProcessor.instance.getStats(),
+};
