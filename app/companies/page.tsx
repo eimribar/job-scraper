@@ -8,9 +8,7 @@ interface CompaniesPageProps {
   searchParams: {
     page?: string;
     tool?: string;
-    confidence?: string;
     search?: string;
-    excludeGoogleSheets?: string;
   };
 }
 
@@ -20,18 +18,15 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
   // Parse query parameters
   const currentPage = parseInt(searchParams.page || "1");
   const tool = searchParams.tool;
-  const confidence = searchParams.confidence;
   const search = searchParams.search;
-  const excludeGoogleSheets = searchParams.excludeGoogleSheets === 'true';
-  const source = excludeGoogleSheets ? 'job_analysis' : undefined;
   
-  const itemsPerPage = 20;
+  const itemsPerPage = 50; // Show more items per page
   const offset = (currentPage - 1) * itemsPerPage;
   
-  // Fetch companies and count
+  // Fetch companies and count - simplified
   const [companies, totalCount] = await Promise.all([
-    dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, confidence, source),
-    dataService.getIdentifiedCompaniesCount(tool, confidence, source)
+    dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, undefined),
+    dataService.getIdentifiedCompaniesCount(tool, undefined, undefined)
   ]);
   
   return (
@@ -63,7 +58,6 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
           totalCount={totalCount}
           currentPage={currentPage}
           initialTool={tool}
-          initialConfidence={confidence}
           initialSearch={search}
         />
       </div>

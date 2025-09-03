@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from "react";
-import { CompaniesTable } from "@/components/companies/companies-table";
+import { CompaniesTable } from "@/components/companies/companies-table-simple";
 import { useRouter } from "next/navigation";
 
 interface CompaniesClientProps {
@@ -9,7 +9,6 @@ interface CompaniesClientProps {
   totalCount: number;
   currentPage: number;
   initialTool?: string;
-  initialConfidence?: string;
   initialSearch?: string;
 }
 
@@ -18,17 +17,14 @@ export function CompaniesClient({
   totalCount,
   currentPage,
   initialTool,
-  initialConfidence,
   initialSearch,
 }: CompaniesClientProps) {
   const router = useRouter();
   
-  const handleFilterChange = (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean }) => {
+  const handleFilterChange = (filters: { tool?: string; search?: string }) => {
     const params = new URLSearchParams();
     if (filters.tool) params.set('tool', filters.tool);
-    if (filters.confidence) params.set('confidence', filters.confidence);
     if (filters.search) params.set('search', filters.search);
-    if (filters.excludeGoogleSheets) params.set('excludeGoogleSheets', 'true');
     params.set('page', '1');
     
     router.push(`/companies?${params.toString()}`);
@@ -37,7 +33,6 @@ export function CompaniesClient({
   const handlePageChange = (page: number) => {
     const params = new URLSearchParams();
     if (initialTool) params.set('tool', initialTool);
-    if (initialConfidence) params.set('confidence', initialConfidence);
     if (initialSearch) params.set('search', initialSearch);
     params.set('page', page.toString());
     
@@ -47,7 +42,6 @@ export function CompaniesClient({
   const handleExport = async () => {
     const params = new URLSearchParams();
     if (initialTool) params.set('tool', initialTool);
-    if (initialConfidence) params.set('confidence', initialConfidence);
     params.set('format', 'csv');
     
     // Create a download link

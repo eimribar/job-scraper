@@ -211,18 +211,14 @@ export class DataService {
       throw error;
     }
 
-    // Map to expected dashboard format
+    // Map to expected dashboard format - simplified
     return data?.map(c => ({
       id: c.id,
-      company_name: c.company,  // Fixed: using 'company' field
+      company: c.company || c.company_name,  // Support both column names
       tool_detected: c.tool_detected,
-      signal_type: c.signal_type,
       context: c.context,
-      confidence: c.confidence,
       job_title: c.job_title,
       job_url: c.job_url,
-      linkedin_url: c.linkedin_url,
-      platform: c.platform,
       identified_date: c.identified_date
     })) || [];
   }
