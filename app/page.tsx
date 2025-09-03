@@ -13,13 +13,29 @@ export default async function Dashboard() {
   // Initialize data service
   const dataService = new DataService();
   
-  // Fetch dashboard data
-  const [stats, companies] = await Promise.all([
-    dataService.getDashboardStats(),
-    dataService.getIdentifiedCompanies(20, 0), // Get first 20 companies
-  ]);
+  let stats = {
+    totalCompanies: 0,
+    outreachCount: 0,
+    salesLoftCount: 0,
+    recentDiscoveries: [],
+    jobsProcessedToday: 0,
+  };
+  
+  let companies: any[] = [];
+  let totalCompaniesCount = 0;
+  
+  try {
+    // Fetch dashboard data
+    [stats, companies] = await Promise.all([
+      dataService.getDashboardStats(),
+      dataService.getIdentifiedCompanies(20, 0), // Get first 20 companies
+    ]);
 
-  const totalCompaniesCount = await dataService.getIdentifiedCompaniesCount();
+    totalCompaniesCount = await dataService.getIdentifiedCompaniesCount();
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    // Use default empty values set above
+  }
 
   return (
     <div className="min-h-screen bg-background">

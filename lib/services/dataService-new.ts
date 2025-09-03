@@ -22,7 +22,7 @@ export interface AnalyzedJob {
 }
 
 export class DataService {
-  private supabase;
+  private supabase: any;
   private isConfigured: boolean;
 
   constructor() {
@@ -32,6 +32,8 @@ export class DataService {
     } catch (error) {
       console.error('Failed to initialize Supabase client:', error);
       this.isConfigured = false;
+      // Create a mock client to prevent crashes
+      this.supabase = null;
     }
   }
 
@@ -155,7 +157,8 @@ export class DataService {
     confidence?: string,
     search?: string
   ): Promise<any[]> {
-    if (!this.isConfigured) {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty companies list');
       return [];
     }
 
@@ -204,7 +207,8 @@ export class DataService {
   }
 
   async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string): Promise<number> {
-    if (!this.isConfigured) {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning 0 count');
       return 0;
     }
 
@@ -273,7 +277,8 @@ export class DataService {
   // ================================================
 
   async getDashboardStats() {
-    if (!this.isConfigured) {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty dashboard stats');
       return {
         totalCompanies: 0,
         outreachCount: 0,
