@@ -221,11 +221,17 @@ export function CompaniesTable({
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground line-clamp-2">
-                            {expandedRows.has(company.id) 
-                              ? company.context 
-                              : (company.context?.substring(0, 150) + (company.context?.length > 150 ? '...' : ''))}
+                            {(() => {
+                              const contextText = company.context || '';
+                              if (expandedRows.has(company.id)) {
+                                return contextText;
+                              }
+                              return contextText.length > 150 
+                                ? contextText.substring(0, 150) + '...' 
+                                : contextText;
+                            })()}
                           </span>
-                          {company.context?.length > 150 && (
+                          {company.context && company.context.length > 150 && (
                             <Button
                               variant="ghost"
                               size="sm"
