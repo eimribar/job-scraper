@@ -25,13 +25,20 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
     const offset = (currentPage - 1) * itemsPerPage;
     
     // Fetch companies and count - simplified
-    const [companies, totalCount] = await Promise.all([
-      dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, undefined),
-      dataService.getIdentifiedCompaniesCount(tool, undefined, undefined)
-    ]).catch(error => {
+    let companies = [];
+    let totalCount = 0;
+    
+    try {
+      [companies, totalCount] = await Promise.all([
+        dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, search),
+        dataService.getIdentifiedCompaniesCount(tool, undefined, search)
+      ]);
+    } catch (error) {
       console.error('Error fetching companies:', error);
-      return [[], 0]; // Return empty data on error
-    });
+      // Continue with empty data if Supabase isn't configured
+      companies = [];
+      totalCount = 0;
+    }
   
   return (
     <div className="min-h-screen bg-background">

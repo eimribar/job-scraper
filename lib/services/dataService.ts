@@ -201,7 +201,7 @@ export class DataService {
 
     // Add search filter
     if (search) {
-      query = query.ilike('company', `%${search}%`);
+      query = query.ilike('company_name', `%${search}%`);
     }
 
     const { data, error } = await query;
