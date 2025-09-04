@@ -1,7 +1,7 @@
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { RecentDiscoveries } from "@/components/dashboard/recent-discoveries";
 import { CompaniesTableWrapper } from "@/components/companies/companies-table-wrapper";
-import { DataService } from "@/lib/services/dataService-new";
+import { DataService } from "@/lib/services/dataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Target, Building2, TrendingUp } from "lucide-react";

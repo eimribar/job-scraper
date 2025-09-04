@@ -13,21 +13,25 @@ interface CompaniesPageProps {
 }
 
 export default async function CompaniesPage({ searchParams }: CompaniesPageProps) {
-  const dataService = new DataService();
-  
-  // Parse query parameters
-  const currentPage = parseInt(searchParams.page || "1");
-  const tool = searchParams.tool;
-  const search = searchParams.search;
-  
-  const itemsPerPage = 50; // Show more items per page
-  const offset = (currentPage - 1) * itemsPerPage;
-  
-  // Fetch companies and count - simplified
-  const [companies, totalCount] = await Promise.all([
-    dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, undefined),
-    dataService.getIdentifiedCompaniesCount(tool, undefined, undefined)
-  ]);
+  try {
+    const dataService = new DataService();
+    
+    // Parse query parameters
+    const currentPage = parseInt(searchParams.page || "1");
+    const tool = searchParams.tool;
+    const search = searchParams.search;
+    
+    const itemsPerPage = 50; // Show more items per page
+    const offset = (currentPage - 1) * itemsPerPage;
+    
+    // Fetch companies and count - simplified
+    const [companies, totalCount] = await Promise.all([
+      dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, undefined),
+      dataService.getIdentifiedCompaniesCount(tool, undefined, undefined)
+    ]).catch(error => {
+      console.error('Error fetching companies:', error);
+      return [[], 0]; // Return empty data on error
+    });
   
   return (
     <div className="min-h-screen bg-background">
@@ -63,4 +67,16 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
       </div>
     </div>
   );
+  } catch (error) {
+    console.error('Error in CompaniesPage:', error);
+    // Return an error page
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Error Loading Companies</h1>
+          <p className="text-muted-foreground">There was an error loading the companies data. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
 }

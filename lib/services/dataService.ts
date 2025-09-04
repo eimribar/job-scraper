@@ -1,82 +1,82 @@
 import { createApiSupabaseClient } from '../supabase';
 import { ScrapedJob } from './scraperService';
-import { AnalyzedJob } from './analysisService';
-import type { Database } from '../database.types';
 
-type JobRow = Database['public']['Tables']['jobs']['Row'];
-type IdentifiedCompanyRow = Database['public']['Tables']['identified_companies']['Row'];
-type SearchTermRow = Database['public']['Tables']['search_terms']['Row'];
+export interface AnalyzedJob {
+  job_id: string;
+  platform: string;
+  company: string;
+  job_title: string;
+  location: string;
+  description: string;
+  job_url: string;
+  scraped_date: string;
+  search_term: string;
+  analysis: {
+    uses_tool: boolean;
+    tool_detected: string;
+    signal_type: string;
+    context: string;
+    confidence: string;
+  };
+  analysis_date: string;
+}
 
 export class DataService {
-  private supabase;
+  private _supabase: any;
   private isConfigured: boolean;
 
   constructor() {
     try {
-      this.supabase = createApiSupabaseClient();
-      this.isConfigured = true;
+      this._supabase = createApiSupabaseClient();
+      this.isConfigured = !!this._supabase;
     } catch (error) {
-      console.error('Failed to initialize Supabase client:', error);
-      this.isConfigured = false;
+      // During build time, this is expected
+      if (process.env.NODE_ENV !== 'production' || process.env.BUILDING) {
+        this._supabase = null;
+        this.isConfigured = false;
+      } else {
+        console.error('Failed to initialize Supabase client:', error);
+        this.isConfigured = false;
+        this._supabase = null;
+      }
     }
   }
+  
+  // Getter that ensures client is initialized before use
+  private get supabase() {
+    if (!this._supabase && !this.isConfigured) {
+      try {
+        this._supabase = createApiSupabaseClient();
+        this.isConfigured = !!this._supabase;
+      } catch (error) {
+        throw new Error('Supabase is not configured. Please check your environment variables.');
+      }
+    }
+    if (!this._supabase) {
+      throw new Error('Supabase client is not available');
+    }
+    return this._supabase;
+  }
 
-  // Jobs management
-  async saveJobsReadyForAnalysis(jobs: ScrapedJob[]): Promise<void> {
+  // ================================================
+  // RAW JOBS MANAGEMENT
+  // ================================================
+
+  async saveRawJobs(jobs: ScrapedJob[]): Promise<void> {
     if (jobs.length === 0) {
-      console.log('saveJobsReadyForAnalysis: No jobs to save (empty array)');
+      console.log('saveRawJobs: No jobs to save (empty array)');
       return;
     }
     
-    console.log(`saveJobsReadyForAnalysis: Attempting to save ${jobs.length} job(s) marked as ready for analysis`);
-    
-    const dataToInsert = jobs.map(job => ({
-      job_type: 'analyze',
-      status: 'pending',
-      payload: {
-        job_id: job.job_id,
-        platform: job.platform,
-        company: job.company,
-        job_title: job.job_title,
-        location: job.location,
-        description: job.description,
-        job_url: job.job_url,
-        scraped_date: job.scraped_date,
-        search_term: job.search_term,
-        ready_for_analysis: true,  // This is the key flag!
-        analyzed: false,
-      },
-      created_at: job.scraped_date,
-    }));
-    
-    const { error } = await this.supabase
-      .from('job_queue')
-      .insert(dataToInsert);
-
-    if (error) {
-      console.error('❌ Error saving jobs ready for analysis:');
-      console.error('  Error details:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-    
-    console.log(`  ✅ Successfully saved ${jobs.length} job(s) ready for analysis`);
-  }
-
-  async saveJobs(jobs: ScrapedJob[]): Promise<void> {
-    if (jobs.length === 0) {
-      console.log('saveJobs: No jobs to save (empty array)');
-      return;
-    }
-    
-    console.log(`\nsaveJobs: Attempting to save ${jobs.length} job(s) to database`);
+    console.log(`\\nsaveRawJobs: Attempting to save ${jobs.length} job(s) to raw_jobs table`);
     jobs.forEach((job, idx) => {
       console.log(`  [${idx + 1}] Job ID: ${job.job_id} | ${job.company} - ${job.job_title}`);
     });
 
-    const dataToInsert = jobs.map(job => ({
-      job_type: 'analyze',
-      status: 'pending',
-      payload: {
+    // Insert jobs with processed = FALSE (ready for analysis)
+    const { error } = await this.supabase
+      .from('raw_jobs')
+      .upsert(jobs.map(job => ({
         job_id: job.job_id,
         platform: job.platform,
         company: job.company,
@@ -86,31 +86,25 @@ export class DataService {
         job_url: job.job_url,
         scraped_date: job.scraped_date,
         search_term: job.search_term,
-      },
-      created_at: job.scraped_date,
-    }));
-    
-    console.log('  Inserting into job_queue table...');
-    const { error } = await this.supabase
-      .from('job_queue')
-      .insert(dataToInsert);
+        processed: false,
+        processed_date: null
+      })), { onConflict: 'job_id' });
 
     if (error) {
-      console.error('❌ Error saving jobs to database:');
+      console.error('❌ Error saving jobs to raw_jobs:');
       console.error('  Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
     
-    console.log(`  ✅ Successfully saved ${jobs.length} job(s) to database\n`);
+    console.log(`  ✅ Successfully saved ${jobs.length} job(s) to raw_jobs table\\n`);
   }
 
-  async getUnprocessedJobs(limit: number = 100): Promise<JobRow[]> {
+  async getUnprocessedJobs(limit: number = 100): Promise<ScrapedJob[]> {
     const { data, error } = await this.supabase
-      .from('job_queue')
+      .from('raw_jobs')
       .select('*')
-      .eq('status', 'pending')
-      .eq('job_type', 'analyze')
-      .order('created_at', { ascending: true })
+      .eq('processed', false)
+      .order('scraped_date', { ascending: true })
       .limit(limit);
 
     if (error) {
@@ -118,39 +112,36 @@ export class DataService {
       throw error;
     }
 
-    // Map to expected format
-    return data?.map(job => ({
-      id: job.id,
-      job_id: job.payload?.job_id || job.id,
-      platform: job.payload?.platform || '',
-      company: job.payload?.company || '',
-      job_title: job.payload?.job_title || '',
-      location: job.payload?.location || '',
-      description: job.payload?.description || '',
-      job_url: job.payload?.job_url || '',
-      scraped_date: job.created_at,
-      search_term: job.payload?.search_term || '',
-      processed: job.status === 'completed',
-      analyzed_date: job.completed_at,
-    })) || [];
+    return data || [];
   }
 
   async markJobAsProcessed(jobId: string): Promise<void> {
     const { error } = await this.supabase
-      .from('job_queue')
+      .from('raw_jobs')
       .update({ 
-        status: 'completed', 
-        completed_at: new Date().toISOString() 
+        processed: true,
+        processed_date: new Date().toISOString()
       })
-      .eq('id', jobId);
+      .eq('job_id', jobId);
 
     if (error) {
       console.error('Error marking job as processed:', error);
       throw error;
     }
+
+    // Also add to processed_jobs tracking table
+    await this.supabase
+      .from('processed_jobs')
+      .upsert({ 
+        job_id: jobId, 
+        processed_date: new Date().toISOString() 
+      }, { onConflict: 'job_id' });
   }
 
-  // Identified companies management
+  // ================================================
+  // IDENTIFIED COMPANIES MANAGEMENT
+  // ================================================
+
   async saveIdentifiedCompany(analyzedJob: AnalyzedJob): Promise<void> {
     if (!analyzedJob.analysis.uses_tool) {
       return;
@@ -158,7 +149,7 @@ export class DataService {
 
     const { error } = await this.supabase
       .from('identified_companies')
-      .insert({
+      .upsert({
         company_name: analyzedJob.company,
         tool_detected: analyzedJob.analysis.tool_detected,
         signal_type: analyzedJob.analysis.signal_type,
@@ -166,8 +157,12 @@ export class DataService {
         confidence: analyzedJob.analysis.confidence,
         job_title: analyzedJob.job_title,
         job_url: analyzedJob.job_url,
+        linkedin_url: '', // For BDR manual population
         platform: analyzedJob.platform,
         identified_date: analyzedJob.analysis_date,
+      }, { 
+        onConflict: 'company_name,tool_detected',
+        ignoreDuplicates: false 
       });
 
     if (error) {
@@ -181,13 +176,13 @@ export class DataService {
     offset: number = 0,
     tool?: string,
     confidence?: string,
-    source?: string
-  ): Promise<IdentifiedCompanyRow[]> {
-    if (!this.isConfigured) {
-      // Return empty array when not configured
+    search?: string
+  ): Promise<any[]> {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty companies list');
       return [];
     }
-    // Use identified_companies table instead of old companies table
+
     let query = this.supabase
       .from('identified_companies')
       .select('*')
@@ -204,9 +199,9 @@ export class DataService {
       query = query.eq('confidence', confidence);
     }
 
-    // Filter by source (google_sheets or job_analysis)
-    if (source) {
-      query = query.eq('source', source);
+    // Add search filter
+    if (search) {
+      query = query.ilike('company', `%${search}%`);
     }
 
     const { data, error } = await query;
@@ -216,14 +211,24 @@ export class DataService {
       throw error;
     }
 
-    // Data is already in the correct format for identified_companies table
-    return data || [];
+    // Map to expected dashboard format - simplified
+    return data?.map(c => ({
+      id: c.id,
+      company: c.company || c.company_name,  // Support both column names
+      tool_detected: c.tool_detected,
+      context: c.context,
+      job_title: c.job_title,
+      job_url: c.job_url,
+      identified_date: c.identified_date
+    })) || [];
   }
 
-  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, source?: string): Promise<number> {
-    if (!this.isConfigured) {
+  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string): Promise<number> {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning 0 count');
       return 0;
     }
+
     let query = this.supabase
       .from('identified_companies')
       .select('id', { count: 'exact', head: true });
@@ -236,8 +241,8 @@ export class DataService {
       query = query.eq('confidence', confidence);
     }
 
-    if (source) {
-      query = query.eq('source', source);
+    if (search) {
+      query = query.ilike('company_name', `%${search}%`);
     }
 
     const { count, error } = await query;
@@ -250,10 +255,13 @@ export class DataService {
     return count || 0;
   }
 
-  // Search terms management
-  async getActiveSearchTerms(): Promise<SearchTermRow[]> {
+  // ================================================
+  // SEARCH TERMS MANAGEMENT
+  // ================================================
+
+  async getActiveSearchTerms(): Promise<any[]> {
     const { data, error } = await this.supabase
-      .from('search_terms')
+      .from('search_terms_clean')
       .select('*')
       .eq('is_active', true)
       .order('search_term');
@@ -268,11 +276,10 @@ export class DataService {
 
   async updateSearchTermLastScraped(searchTerm: string, jobsFound: number): Promise<void> {
     const { error } = await this.supabase
-      .from('search_terms')
+      .from('search_terms_clean')
       .update({
         last_scraped_date: new Date().toISOString(),
         jobs_found_count: jobsFound,
-        platform_last_scraped: 'Indeed, LinkedIn',
       })
       .eq('search_term', searchTerm);
 
@@ -282,10 +289,13 @@ export class DataService {
     }
   }
 
-  // Dashboard stats
+  // ================================================
+  // DASHBOARD STATS
+  // ================================================
+
   async getDashboardStats() {
-    if (!this.isConfigured) {
-      // Return mock data when not configured
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty dashboard stats');
       return {
         totalCompanies: 0,
         outreachCount: 0,
@@ -296,16 +306,15 @@ export class DataService {
     }
     
     try {
-      // Get total companies by tool from new schema
-      const { data: companies, error: companiesError } = await this.supabase!
-        .from('companies')
-        .select('name, uses_outreach, uses_salesloft, created_at')
-        .or('uses_outreach.eq.true,uses_salesloft.eq.true');
+      // Get total companies by tool
+      const { data: companies, error: companiesError } = await this.supabase
+        .from('identified_companies')
+        .select('company, tool_detected, identified_date');
 
       if (companiesError) throw companiesError;
 
-      const outreachCount = companies?.filter(c => c.uses_outreach).length || 0;
-      const salesLoftCount = companies?.filter(c => c.uses_salesloft).length || 0;
+      const outreachCount = companies?.filter(c => c.tool_detected === 'Outreach.io' || c.tool_detected === 'Both').length || 0;
+      const salesLoftCount = companies?.filter(c => c.tool_detected === 'SalesLoft' || c.tool_detected === 'Both').length || 0;
       const totalCompanies = companies?.length || 0;
 
       // Get recent discoveries (last 24 hours)
@@ -313,32 +322,30 @@ export class DataService {
       yesterday.setDate(yesterday.getDate() - 1);
 
       const { data: recentCompanies, error: recentError } = await this.supabase
-        .from('companies')
-        .select('name, uses_outreach, uses_salesloft, created_at')
-        .gte('created_at', yesterday.toISOString())
-        .order('created_at', { ascending: false })
+        .from('identified_companies')
+        .select('company, tool_detected, identified_date')
+        .gte('identified_date', yesterday.toISOString())
+        .order('identified_date', { ascending: false })
         .limit(10);
 
       if (recentError) throw recentError;
 
-      // Map to the expected format
-      const recentDiscoveries = recentCompanies?.map(c => ({
-        company_name: c.name,
-        tool_detected: c.uses_outreach && c.uses_salesloft ? 'Both' : 
-                      c.uses_outreach ? 'Outreach.io' : 
-                      c.uses_salesloft ? 'SalesLoft' : 'none',
-        identified_date: c.created_at
-      })) || [];
+      // Map recent discoveries to expected format
+      const recentDiscoveries = (recentCompanies || []).map(company => ({
+        company_name: company.company,  // Map 'company' to 'company_name'
+        tool_detected: company.tool_detected,
+        identified_date: company.identified_date
+      }));
 
-      // Get total jobs processed today from job_queue
+      // Get total jobs processed today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
       const { count: jobsProcessedToday, error: jobsError } = await this.supabase
-        .from('job_queue')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', today.toISOString())
-        .eq('status', 'completed');
+        .from('raw_jobs')
+        .select('job_id', { count: 'exact', head: true })
+        .eq('processed', true)
+        .gte('analyzed_date', today.toISOString());
 
       if (jobsError) throw jobsError;
 
@@ -350,61 +357,55 @@ export class DataService {
         jobsProcessedToday: jobsProcessedToday || 0,
       };
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
+      console.error('Error fetching dashboard stats - Full error:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       throw error;
     }
   }
 
-  // Check for existing processed jobs and companies (for deduplication)
-  async getProcessedJobIds(): Promise<string[]> {
-    const { data, error } = await this.supabase
-      .from('job_queue')
-      .select('id')
-      .eq('status', 'completed');
+  // ================================================
+  // DEDUPLICATION HELPERS
+  // ================================================
 
-    if (error) {
-      console.error('Error fetching processed job IDs:', error);
-      return [];
-    }
-
-    return data?.map(job => job.id) || [];
-  }
-
-  // Check if a specific job ID already exists - OPTIMIZED VERSION
   async jobExists(jobId: string): Promise<boolean> {
     try {
-      // Use count query for efficiency - doesn't load actual data
       const { count, error } = await this.supabase
-        .from('job_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('payload->>job_id', jobId);
+        .from('raw_jobs')
+        .select('job_id', { count: 'exact', head: true })
+        .eq('job_id', jobId);
 
       if (error) {
-        console.log(`  ⚠️ Optimized query failed for job_id: ${jobId}, error:`, error.message);
-        return false; // Assume doesn't exist if query fails
+        console.log(`  ⚠️ Query failed for job_id: ${jobId}, error:`, error.message);
+        return false;
       }
 
       return (count && count > 0);
     } catch (error) {
       console.error(`  ❌ Error checking job existence: ${error}`);
-      return false; // Assume doesn't exist if error occurs
+      return false;
     }
   }
 
-  async getKnownCompanies(): Promise<string[]> {
+  async getExistingJobIds(): Promise<string[]> {
     const { data, error } = await this.supabase
-      .from('companies')
-      .select('name');
+      .from('raw_jobs')
+      .select('job_id');
 
     if (error) {
-      console.error('Error fetching known companies:', error);
+      console.error('Error fetching existing job IDs:', error);
       return [];
     }
 
-    return data?.map(company => company.name.toLowerCase().trim()) || [];
+    return data?.map(job => job.job_id) || [];
   }
 
-  // Export functionality
+  // ================================================
+  // EXPORT FUNCTIONALITY
+  // ================================================
+
   async exportIdentifiedCompanies(
     tool?: string,
     confidence?: string,
@@ -425,7 +426,8 @@ export class DataService {
       'Job Title',
       'Platform',
       'Identified Date',
-      'Job URL'
+      'Job URL',
+      'LinkedIn URL'
     ];
 
     const csvRows = [
@@ -438,10 +440,11 @@ export class DataService {
         `"${company.job_title}"`,
         `"${company.platform}"`,
         `"${new Date(company.identified_date).toLocaleDateString()}"`,
-        `"${company.job_url}"`
+        `"${company.job_url}"`,
+        `"${company.linkedin_url}"`
       ].join(','))
     ];
 
-    return csvRows.join('\n');
+    return csvRows.join('\\n');
   }
 }
