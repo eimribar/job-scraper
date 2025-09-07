@@ -10,7 +10,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.loc
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;

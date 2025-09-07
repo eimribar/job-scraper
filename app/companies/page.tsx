@@ -1,5 +1,7 @@
 import { DataService } from "@/lib/services/dataService";
 import { CompaniesClient } from "./companies-client";
+import { AppHeader } from "@/components/navigation/app-header";
+import { QuickStats } from "@/components/dashboard/quick-stats";
 
 // Enable real-time data updates by disabling Next.js caching
 export const dynamic = 'force-dynamic';
@@ -16,22 +18,31 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
   try {
     const dataService = new DataService();
     
-    // Parse query parameters
-    const currentPage = parseInt(searchParams.page || "1");
-    const tool = searchParams.tool;
-    const search = searchParams.search;
+    // Parse query parameters (await searchParams for Next.js 15)
+    const params = await searchParams;
+    const currentPage = parseInt(params.page || "1");
+    const tool = params.tool;
+    const search = params.search;
+    const leadStatus = params.leadStatus as 'all' | 'with_leads' | 'without_leads' | undefined;
     
     const itemsPerPage = 50; // Show more items per page
     const offset = (currentPage - 1) * itemsPerPage;
     
-    // Fetch companies and count - simplified
+    // Fetch companies, count, and dashboard stats
     let companies = [];
     let totalCount = 0;
+    let dashboardStats = {
+      totalCompanies: 0,
+      outreachCount: 0,
+      salesLoftCount: 0,
+      bothCount: 0
+    };
     
     try {
-      [companies, totalCount] = await Promise.all([
-        dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, search),
-        dataService.getIdentifiedCompaniesCount(tool, undefined, search)
+      [companies, totalCount, dashboardStats] = await Promise.all([
+        dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, search, leadStatus),
+        dataService.getIdentifiedCompaniesCount(tool, undefined, search, leadStatus),
+        dataService.getDashboardStats()
       ]);
     } catch (error) {
       console.error('Error fetching companies:', error);
@@ -41,35 +52,39 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
     }
   
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Identified Companies
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Complete overview of all companies using Outreach.io and SalesLoft
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold">{totalCount}</p>
-              <p className="text-sm text-muted-foreground">Total Companies</p>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
+      {/* App Navigation Header */}
+      <AppHeader />
+      
+      {/* Page Header */}
+      <div className="border-b bg-white/70 backdrop-blur-md">
+        <div className="container mx-auto px-6 py-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Companies Dashboard
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Manage and track companies using Outreach.io and SalesLoft
+            </p>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-6 py-4 space-y-4">
+        {/* Quick Stats */}
+        <section>
+          <QuickStats />
+        </section>
+
+        {/* Companies Table */}
         <CompaniesClient
           companies={companies}
           totalCount={totalCount}
           currentPage={currentPage}
           initialTool={tool}
           initialSearch={search}
+          dashboardStats={dashboardStats}
         />
       </div>
     </div>

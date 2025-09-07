@@ -194,115 +194,26 @@ export function CompaniesTable({
 
   return (
     <div className="space-y-4">
-      {/* Navigation Bar */}
-      <div className="flex items-center justify-between p-4 bg-background border-b">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <a href="/" className="flex items-center gap-1 hover:text-foreground transition-colors">
-            <Home className="h-4 w-4" />
-            <span>Dashboard</span>
-          </a>
-          <ChevronRight className="h-4 w-4" />
-          <span className="text-foreground font-medium">Companies</span>
-          {sourceFilter !== 'all' && (
-            <>
-              <ChevronRight className="h-4 w-4" />
-              <span className="text-foreground">
-                {sourceFilter === 'new' ? 'New Discoveries' : 'Google Sheets Import'}
-              </span>
-            </>
-          )}
-        </div>
-        {hasActiveFilters && (
-          <Button 
-            onClick={clearAllFilters}
-            variant="ghost" 
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4 mr-2" />
-            Clear all filters
-          </Button>
-        )}
-      </div>
 
-      <Card>
+      <Card className="border-0 shadow-sm">
         {!compact && (
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <CardTitle className="flex items-center gap-2">
-              Companies Using Sales Tools
-              <Badge variant="secondary" className="ml-2">
-                {totalCount} total
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">Companies</h2>
+              <Badge variant="secondary" className="font-medium">
+                {totalCount}
               </Badge>
-            </CardTitle>
+            </div>
             <Button onClick={onExport} variant="outline" size="sm" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
           </div>
           
-          {/* Professional Filter Buttons */}
-          <div className="space-y-4 mt-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Data Source</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-green-600 border-green-200">
-                  107 New
-                </Badge>
-                <Badge variant="outline" className="text-blue-600 border-blue-200">
-                  690 Imported
-                </Badge>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={sourceFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setSourceFilter('all');
-                  handleFilterChange('all');
-                }}
-                className="min-w-[120px]"
-              >
-                All Companies
-                <Badge variant="secondary" className="ml-2">{stats.total || totalCount}</Badge>
-              </Button>
-              
-              <Button
-                variant={sourceFilter === 'new' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setSourceFilter('new');
-                  handleFilterChange('new');
-                }}
-                className="min-w-[140px]"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                New Discoveries
-                <Badge variant="secondary" className="ml-2">{stats.newDiscoveries}</Badge>
-              </Button>
-              
-              <Button
-                variant={sourceFilter === 'imported' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setSourceFilter('imported');
-                  handleFilterChange('imported');
-                }}
-                className="min-w-[140px]"
-              >
-                Google Sheets
-                <Badge variant="secondary" className="ml-2">{stats.googleSheets}</Badge>
-              </Button>
-            </div>
-          </div>
         
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+        <div className="flex flex-col sm:flex-row gap-3 mt-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -311,7 +222,7 @@ export function CompaniesTable({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleFilterChange()}
-                className="pl-9"
+                className="pl-9 bg-white border-slate-200"
               />
             </div>
           </div>
@@ -325,10 +236,10 @@ export function CompaniesTable({
               leadStatus: leadFilter === 'all' ? undefined : leadFilter,
             });
           }}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px] bg-white border-slate-200 hover:bg-slate-50">
               <SelectValue placeholder="Filter by tool" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white border-slate-200">
               <SelectItem value="all">All Tools</SelectItem>
               <SelectItem value="Outreach.io">Outreach.io</SelectItem>
               <SelectItem value="SalesLoft">SalesLoft</SelectItem>
@@ -344,21 +255,25 @@ export function CompaniesTable({
               leadStatus: value === 'all' ? undefined : value,
             });
           }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Lead status" />
+            <SelectTrigger className="w-[180px] bg-white border-slate-200 hover:bg-slate-50">
+              <div className="flex items-center gap-2">
+                {leadFilter === 'with_leads' && <CheckCircle2 className="h-3 w-3 text-green-600" />}
+                {leadFilter === 'without_leads' && <Circle className="h-3 w-3 text-orange-600" />}
+                <SelectValue placeholder="Lead status" />
+              </div>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white border-slate-200">
               <SelectItem value="all">All Companies</SelectItem>
               <SelectItem value="with_leads">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3 w-3 text-green-600" />
-                  With Leads
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span>Has Leads</span>
                 </div>
               </SelectItem>
               <SelectItem value="without_leads">
                 <div className="flex items-center gap-2">
-                  <Circle className="h-3 w-3 text-orange-600" />
-                  Need Leads
+                  <Circle className="h-4 w-4 text-orange-600" />
+                  <span>Needs Leads</span>
                 </div>
               </SelectItem>
             </SelectContent>
@@ -484,13 +399,14 @@ export function CompaniesTable({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0"
+                          className="h-8 w-8 p-0 transition-all hover:scale-110"
                           onClick={() => handleLeadStatusUpdate(company.id, !company.leads_generated)}
+                          title={company.leads_generated ? "Mark as needs leads" : "Mark as has leads"}
                         >
                           {company.leads_generated ? (
-                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <CheckCircle2 className="h-5 w-5 text-green-600 hover:text-green-700" />
                           ) : (
-                            <Circle className="h-5 w-5 text-muted-foreground hover:text-orange-600" />
+                            <Circle className="h-5 w-5 text-muted-foreground hover:text-orange-600 transition-colors" />
                           )}
                         </Button>
                       </TableCell>

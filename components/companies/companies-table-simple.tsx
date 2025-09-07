@@ -41,6 +41,12 @@ interface CompaniesTableProps {
   onPageChange: (page: number) => void;
   onFilterChange: (filters: { tool?: string; search?: string }) => void;
   onExport: () => void;
+  dashboardStats: {
+    totalCompanies: number;
+    outreachCount: number;
+    salesLoftCount: number;
+    bothCount: number;
+  };
 }
 
 export function CompaniesTable({
@@ -50,6 +56,7 @@ export function CompaniesTable({
   onPageChange,
   onFilterChange,
   onExport,
+  dashboardStats,
 }: CompaniesTableProps) {
   const [toolFilter, setToolFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,12 +94,6 @@ export function CompaniesTable({
     return <ToolIcon tool={tool} showText={false} />;
   };
 
-  // Get tool statistics
-  const toolStats = companies.reduce((acc, company) => {
-    acc[company.tool_detected] = (acc[company.tool_detected] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <div className="space-y-6">
       {/* Stats Summary */}
@@ -102,7 +103,7 @@ export function CompaniesTable({
             <CardTitle className="text-sm text-muted-foreground">Total Companies</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCount}</div>
+            <div className="text-2xl font-bold">{dashboardStats.totalCompanies}</div>
           </CardContent>
         </Card>
         <Card>
@@ -111,7 +112,7 @@ export function CompaniesTable({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {toolStats['Outreach.io'] || 0}
+              {dashboardStats.outreachCount}
             </div>
           </CardContent>
         </Card>
@@ -121,7 +122,7 @@ export function CompaniesTable({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {toolStats['SalesLoft'] || 0}
+              {dashboardStats.salesLoftCount}
             </div>
           </CardContent>
         </Card>
@@ -131,7 +132,7 @@ export function CompaniesTable({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
-              {toolStats['Both'] || 0}
+              {dashboardStats.bothCount}
             </div>
           </CardContent>
         </Card>

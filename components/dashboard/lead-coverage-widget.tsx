@@ -41,14 +41,34 @@ export function LeadCoverageWidget() {
 
   const fetchLeadStats = async () => {
     try {
-      const response = await fetch('/api/companies/lead-stats');
+      const response = await fetch('/api/companies/lead-stats', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.success) {
         setStats(data.stats);
+      } else {
+        throw new Error(data.error || 'Failed to fetch lead stats');
       }
     } catch (error) {
       console.error('Error fetching lead stats:', error);
+      // Set default values on error
+      setStats({
+        totalCompanies: 0,
+        companiesWithLeads: 0,
+        companiesWithoutLeads: 0,
+        leadCoverage: 0,
+        recentLeadUpdates: []
+      });
     } finally {
       setLoading(false);
     }
