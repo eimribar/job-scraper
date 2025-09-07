@@ -81,7 +81,7 @@ async function initializeDatabase() {
   
   console.log('⚠️ IMPORTANT: Supabase requires manual SQL execution through the dashboard.');
   console.log('\n📋 Please follow these steps:\n');
-  console.log('1. Go to: https://supabase.com/dashboard/project/adbcghllcrmcbdunwras/sql/new');
+  console.log('1. Go to: https://supabase.com/dashboard/project/nslcadgicgkncajoyyno/sql/new');
   console.log('2. Copy the contents of: migrations/enhanced-schema.sql');
   console.log('3. Paste and execute in the SQL editor');
   console.log('\n✨ The schema includes:');
@@ -185,7 +185,7 @@ async function main() {
   
   if (!isSetup) {
     console.log('📌 Quick Setup Link:');
-    console.log('https://supabase.com/dashboard/project/adbcghllcrmcbdunwras/sql/new\n');
+    console.log('https://supabase.com/dashboard/project/nslcadgicgkncajoyyno/sql/new\n');
   }
 }
 

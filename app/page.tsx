@@ -1,178 +1,137 @@
-import { StatsCards } from "@/components/dashboard/stats-cards";
-import { RecentDiscoveries } from "@/components/dashboard/recent-discoveries";
+import { LiveActivityFeed } from "@/components/dashboard/live-activity-feed";
+import { ProcessingWidget } from "@/components/dashboard/processing-widget";
+import { QuickStats } from "@/components/dashboard/quick-stats";
+import { LeadCoverageWidget } from "@/components/dashboard/lead-coverage-widget";
 import { CompaniesTableWrapper } from "@/components/companies/companies-table-wrapper";
 import { DataService } from "@/lib/services/dataService";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Building2, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, Sparkles, Zap, Settings, Activity } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
 
-// Enable real-time data updates by disabling Next.js caching
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
-  // Initialize data service
   const dataService = new DataService();
-  
-  let stats = {
-    totalCompanies: 0,
-    outreachCount: 0,
-    salesLoftCount: 0,
-    recentDiscoveries: [],
-    jobsProcessedToday: 0,
-  };
   
   let companies: any[] = [];
   let totalCompaniesCount = 0;
   
   try {
-    // Fetch dashboard data
-    [stats, companies] = await Promise.all([
-      dataService.getDashboardStats(),
-      dataService.getIdentifiedCompanies(20, 0), // Get first 20 companies
-    ]);
-
+    companies = await dataService.getIdentifiedCompanies(10, 0);
     totalCompaniesCount = await dataService.getIdentifiedCompaniesCount();
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    // Use default empty values set above
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
+      {/* Enhanced Header */}
+      <header className="border-b bg-white/70 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <div className="container mx-auto px-6 py-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                <div className="p-2 bg-primary rounded-lg">
-                  <Target className="h-6 w-6 text-primary-foreground" />
+            <div className="flex items-center gap-3">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 blur-xl group-hover:blur-2xl transition-all" />
+                <div className="relative p-2.5 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-lg">
+                  <Activity className="h-5 w-5 text-white" />
                 </div>
-                Sales Tool Detector
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Identify companies using Outreach.io and SalesLoft through job posting analysis
-              </p>
-            </div>
-            <div className="hidden md:flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-2xl font-bold">{stats.totalCompanies}</p>
-                <p className="text-sm text-muted-foreground">Companies Found</p>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Sales Tool Detector</h1>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    Live Monitoring
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <Image src="/logos/outreach_transparent.png" alt="Outreach" width={40} height={12} className="object-contain opacity-60" />
+                    <span className="text-muted-foreground">•</span>
+                    <Image src="/logos/salesloft_transparent.png" alt="SalesLoft" width={40} height={12} className="object-contain opacity-60" />
+                  </span>
+                </div>
               </div>
             </div>
+            
+            <nav className="flex items-center gap-1">
+              <Link href="/companies">
+                <Button variant="ghost" size="sm" className="gap-2 hover:bg-blue-50">
+                  Companies
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </Link>
+              <Link href="/automation">
+                <Button variant="ghost" size="sm" className="gap-2 hover:bg-purple-50">
+                  <Zap className="h-3 w-3" />
+                  Automation
+                </Button>
+              </Link>
+              <Link href="/settings">
+                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </Link>
+            </nav>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="space-y-8">
-          {/* Stats Overview */}
+      <main className="container mx-auto px-6 py-3">
+        <div className="space-y-3">
+          {/* Quick Stats */}
           <section>
-            <StatsCards stats={stats} />
+            <QuickStats />
           </section>
 
-          {/* Main Dashboard Tabs */}
-          <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="overview" className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="companies" className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Companies
-              </TabsTrigger>
-              <TabsTrigger value="insights" className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Insights
-              </TabsTrigger>
-            </TabsList>
+          {/* Main Grid with hover effects */}
+          <div className="grid gap-3 lg:grid-cols-3 items-start">
+            {/* Live Activity Feed - Takes 2 columns on large screens */}
+            <div className="lg:col-span-2">
+              <LiveActivityFeed />
+            </div>
+            
+            {/* Right column widgets */}
+            <div className="space-y-2">
+              {/* Processing Widget */}
+              <ProcessingWidget />
+              
+              {/* Lead Coverage Widget */}
+              <LeadCoverageWidget />
+            </div>
+          </div>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                {/* Recent Discoveries */}
-                <RecentDiscoveries discoveries={stats.recentDiscoveries} />
-                
-                {/* Quick Stats Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tool Breakdown</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-green-500" />
-                          <span className="font-medium">Outreach.io</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-bold">{stats.outreachCount}</span>
-                          <p className="text-xs text-muted-foreground">
-                            {((stats.outreachCount / stats.totalCompanies) * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-blue-500" />
-                          <span className="font-medium">SalesLoft</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-bold">{stats.salesLoftCount}</span>
-                          <p className="text-xs text-muted-foreground">
-                            {((stats.salesLoftCount / stats.totalCompanies) * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-4 border-t">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Total Companies</span>
-                          <span className="font-bold">{stats.totalCompanies}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Recent Companies Section with enhanced styling */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h2 className="text-lg font-bold">Recent Discoveries</h2>
+                <p className="text-xs text-muted-foreground">
+                  Latest companies identified using sales engagement platforms
+                </p>
               </div>
-            </TabsContent>
+              <Link href="/companies">
+                <Button variant="outline" size="sm" className="gap-2 hover:scale-105 transition-transform shadow-sm hover:shadow-md">
+                  View All {totalCompaniesCount}
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl border shadow-lg hover:shadow-xl transition-shadow">
+              <CompaniesTableWrapper 
+                companies={companies}
+                totalCount={totalCompaniesCount}
+                compact={true}
+              />
+            </div>
+          </section>
 
-            {/* Companies Tab */}
-            <TabsContent value="companies">
-              <div className="space-y-4">
-                <CompaniesTableWrapper 
-                  companies={companies}
-                  totalCount={totalCompaniesCount}
-                />
-              </div>
-            </TabsContent>
-
-            {/* Insights Tab */}
-            <TabsContent value="insights">
-              <div className="grid gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Coming Soon: Advanced Insights</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-center py-12">
-                      <TrendingUp className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium mb-2">Advanced Analytics in Development</h3>
-                      <p className="text-muted-foreground max-w-md mx-auto">
-                        We&apos;re building powerful insights including territory mapping, trend analysis, 
-                        and competitive intelligence. Check back soon!
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -26,8 +26,8 @@ APIFY_LINKEDIN_ACTOR=bebity~linkedin-jobs-scraper
 APIFY_LINKEDIN_ENDPOINT=https://api.apify.com/v2/acts/bebity~linkedin-jobs-scraper/run-sync-get-dataset-items
 
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://adbcghllcrmcbdunwras.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkYmNnaGxsY3JtY2JkdW53cmFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyMDc3NTksImV4cCI6MjA3MTc4Mzc1OX0.4xRHM7fokLsFqybYOh-i1eZ77azy0zABTwuF7SqRHCs
+NEXT_PUBLIC_SUPABASE_URL=https://nslcadgicgkncajoyyno.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zbGNhZGdpY2drbmNham95eW5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MTEyNTEsImV4cCI6MjA3MjM4NzI1MX0.VygboFJPF_vMdcxVyUVc10IXXmZmSShxbNZfXxng4MA
 SUPABASE_SERVICE_ROLE_KEY=  # REQUIRED FOR PRODUCTION - Get from Supabase Dashboard
 
 # ===========================================

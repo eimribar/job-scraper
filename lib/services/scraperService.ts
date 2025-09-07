@@ -31,8 +31,8 @@ export class ScraperService {
     try {
       console.log(`Scraping LinkedIn for: ${searchTerm} (max ${maxItems} jobs)`);
       
-      // Add timeout protection (2 minutes for scraping)
-      const timeoutMs = 2 * 60 * 1000; // 2 minutes
+      // Add timeout protection (5 minutes for scraping - Apify typically takes 1-5 minutes)
+      const timeoutMs = 5 * 60 * 1000; // 5 minutes
       
       const runPromise = this.apifyClient.actor('bebity~linkedin-jobs-scraper').call({
         proxy: {

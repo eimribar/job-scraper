@@ -26,12 +26,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles, X, Filter, Home, ChevronRight } from "lucide-react";
+import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles, X, Filter, Home, ChevronRight, CheckCircle2, Circle, Users } from "lucide-react";
 import { format } from "date-fns";
+import { ToolIcon } from '@/components/tool-logos';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Company {
   id: string;
   company_name: string;
+  company?: string;
   tool_detected: string;
   signal_type: string;
   context: string;
@@ -40,6 +43,14 @@ interface Company {
   job_url: string;
   platform: string;
   identified_date: string;
+  leads_generated?: boolean;
+  leads_generated_date?: string;
+  leads_generated_by?: string;
+  lead_gen_notes?: string;
+  tier?: string;
+  sponsor_1?: string;
+  sponsor_2?: string;
+  rep_sdr_bdr?: string;
 }
 
 interface CompaniesTableProps {
@@ -47,8 +58,9 @@ interface CompaniesTableProps {
   totalCount: number;
   currentPage: number;
   onPageChange: (page: number) => void;
-  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean }) => void;
+  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string }) => void;
   onExport: () => void;
+  compact?: boolean;
 }
 
 export function CompaniesTable({
@@ -58,10 +70,12 @@ export function CompaniesTable({
   onPageChange,
   onFilterChange,
   onExport,
+  compact = false,
 }: CompaniesTableProps) {
   const [toolFilter, setToolFilter] = useState<string>('all');
-  const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [leadFilter, setLeadFilter] = useState<string>('all');
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
   const [sourceFilter, setSourceFilter] = useState<'all' | 'new' | 'imported'>('all');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState({
@@ -89,38 +103,24 @@ export function CompaniesTable({
     const filterToUse = newSourceFilter !== undefined ? newSourceFilter : sourceFilter;
     onFilterChange({
       tool: toolFilter === 'all' ? undefined : toolFilter,
-      confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
       search: searchTerm || undefined,
       excludeGoogleSheets: filterToUse === 'new',
+      leadStatus: leadFilter === 'all' ? undefined : leadFilter,
     });
   };
 
   const clearAllFilters = () => {
     setToolFilter('all');
-    setConfidenceFilter('all');
     setSearchTerm('');
     setSourceFilter('all');
+    setLeadFilter('all');
     onFilterChange({});
   };
 
-  const hasActiveFilters = toolFilter !== 'all' || confidenceFilter !== 'all' || searchTerm || sourceFilter !== 'all';
+  const hasActiveFilters = toolFilter !== 'all' || searchTerm || sourceFilter !== 'all' || leadFilter !== 'all';
 
   const getToolBadge = (tool: string) => {
-    if (tool === 'Outreach.io') {
-      return (
-        <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-200">
-          🎯 Outreach
-        </Badge>
-      );
-    }
-    if (tool === 'SalesLoft') {
-      return (
-        <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200">
-          ⚡ SalesLoft
-        </Badge>
-      );
-    }
-    return <Badge variant="outline">{tool}</Badge>;
+    return <ToolIcon tool={tool} showText={false} />;
   };
 
   const getSignalBadge = (signal: string) => {
@@ -136,20 +136,50 @@ export function CompaniesTable({
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const getConfidenceBadge = (confidence: string) => {
-    const colors = {
-      high: 'bg-green-50 text-green-700 border-green-200',
-      medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-      low: 'bg-gray-50 text-gray-700 border-gray-200',
-    };
+  // Confidence badge removed - not in current data model
 
-    const colorClass = colors[confidence as keyof typeof colors] || 'bg-gray-50 text-gray-700';
+  const handleLeadStatusUpdate = async (companyId: string, leadsGenerated: boolean) => {
+    try {
+      const response = await fetch('/api/companies/update-lead-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          leadsGenerated,
+          generatedBy: 'Manual Update'
+        })
+      });
 
-    return (
-      <Badge variant="outline" className={colorClass}>
-        {confidence.charAt(0).toUpperCase() + confidence.slice(1)}
-      </Badge>
-    );
+      if (response.ok) {
+        // Refresh the page or update state
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error);
+    }
+  };
+
+  const handleBulkLeadUpdate = async (leadsGenerated: boolean) => {
+    if (selectedCompanies.size === 0) return;
+    
+    try {
+      const response = await fetch('/api/companies/update-lead-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyIds: Array.from(selectedCompanies),
+          leadsGenerated,
+          generatedBy: 'Bulk Update'
+        })
+      });
+
+      if (response.ok) {
+        setSelectedCompanies(new Set());
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error bulk updating lead status:', error);
+    }
   };
 
   const toggleRowExpansion = (id: string) => {
@@ -196,6 +226,7 @@ export function CompaniesTable({
       </div>
 
       <Card>
+        {!compact && (
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <CardTitle className="flex items-center gap-2">
@@ -289,9 +320,9 @@ export function CompaniesTable({
             setToolFilter(value);
             onFilterChange({
               tool: value === 'all' ? undefined : value,
-              confidence: confidenceFilter === 'all' ? undefined : confidenceFilter,
               search: searchTerm || undefined,
               excludeGoogleSheets: sourceFilter === 'new',
+              leadStatus: leadFilter === 'all' ? undefined : leadFilter,
             });
           }}>
             <SelectTrigger className="w-[180px]">
@@ -304,39 +335,93 @@ export function CompaniesTable({
             </SelectContent>
           </Select>
 
-          <Select value={confidenceFilter} onValueChange={(value) => {
-            setConfidenceFilter(value);
+          <Select value={leadFilter} onValueChange={(value) => {
+            setLeadFilter(value);
             onFilterChange({
               tool: toolFilter === 'all' ? undefined : toolFilter,
-              confidence: value === 'all' ? undefined : value,
               search: searchTerm || undefined,
               excludeGoogleSheets: sourceFilter === 'new',
+              leadStatus: value === 'all' ? undefined : value,
             });
           }}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by confidence" />
+              <SelectValue placeholder="Lead status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Confidence</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="all">All Companies</SelectItem>
+              <SelectItem value="with_leads">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                  With Leads
+                </div>
+              </SelectItem>
+              <SelectItem value="without_leads">
+                <div className="flex items-center gap-2">
+                  <Circle className="h-3 w-3 text-orange-600" />
+                  Need Leads
+                </div>
+              </SelectItem>
             </SelectContent>
           </Select>
 
         </div>
+        
+        {/* Bulk Actions Bar */}
+        {selectedCompanies.size > 0 && (
+          <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg mt-4">
+            <span className="text-sm font-medium">{selectedCompanies.size} selected</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulkLeadUpdate(true)}
+              className="gap-2"
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              Mark as Leads Generated
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBulkLeadUpdate(false)}
+              className="gap-2"
+            >
+              <Circle className="h-3 w-3" />
+              Mark as No Leads
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedCompanies(new Set())}
+            >
+              Clear Selection
+            </Button>
+          </div>
+        )}
       </CardHeader>
+        )}
       
-      <CardContent className="p-0 sm:p-6">
+      <CardContent className={compact ? "p-0" : "p-0 sm:p-6"}>
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[30px] hidden sm:table-cell"></TableHead>
+                <TableHead className="w-[30px] hidden sm:table-cell">
+                  <Checkbox
+                    checked={selectedCompanies.size === companies.length && companies.length > 0}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedCompanies(new Set(companies.map(c => c.id)));
+                      } else {
+                        setSelectedCompanies(new Set());
+                      }
+                    }}
+                  />
+                </TableHead>
                 <TableHead className="min-w-[150px]">Company</TableHead>
+                <TableHead className="w-[80px]">Leads</TableHead>
                 <TableHead className="min-w-[100px]">Tool</TableHead>
                 <TableHead className="hidden md:table-cell">Signal</TableHead>
-                <TableHead className="hidden lg:table-cell">Confidence</TableHead>
+                <TableHead className="hidden lg:table-cell">Tier</TableHead>
                 <TableHead className="hidden xl:table-cell">Job Title</TableHead>
                 <TableHead className="hidden sm:table-cell">Platform</TableHead>
                 <TableHead className="hidden sm:table-cell">Discovered</TableHead>
@@ -346,7 +431,7 @@ export function CompaniesTable({
             <TableBody>
               {companies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={10} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Search className="h-8 w-8 text-muted-foreground mb-2" />
                       <p className="text-muted-foreground">No companies found matching your criteria</p>
@@ -358,29 +443,56 @@ export function CompaniesTable({
                   <React.Fragment key={company.id}>
                     <TableRow className="hover:bg-muted/50 transition-colors">
                       <TableCell className="hidden sm:table-cell">
-                        {company.context && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleRowExpansion(company.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            {expandedRows.has(company.id) ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        )}
+                        <Checkbox
+                          checked={selectedCompanies.has(company.id)}
+                          onCheckedChange={(checked) => {
+                            const newSelected = new Set(selectedCompanies);
+                            if (checked) {
+                              newSelected.add(company.id);
+                            } else {
+                              newSelected.delete(company.id);
+                            }
+                            setSelectedCompanies(newSelected);
+                          }}
+                        />
                       </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex flex-col gap-1">
-                          {company.company_name}
+                          <div className="flex items-center gap-2">
+                            {company.company || company.company_name}
+                            {company.context && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleRowExpansion(company.id)}
+                                className="h-4 w-4 p-0"
+                              >
+                                {expandedRows.has(company.id) ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
                           <div className="flex gap-2 md:hidden">
                             {getSignalBadge(company.signal_type)}
-                            {getConfidenceBadge(company.confidence)}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleLeadStatusUpdate(company.id, !company.leads_generated)}
+                        >
+                          {company.leads_generated ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <Circle className="h-5 w-5 text-muted-foreground hover:text-orange-600" />
+                          )}
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {getToolBadge(company.tool_detected)}
@@ -389,7 +501,11 @@ export function CompaniesTable({
                         {getSignalBadge(company.signal_type)}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        {getConfidenceBadge(company.confidence)}
+                        {company.tier ? (
+                          <Badge variant="outline" className="text-xs">
+                            {company.tier}
+                          </Badge>
+                        ) : '-'}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate hidden xl:table-cell">
                         <TooltipProvider>
@@ -435,7 +551,7 @@ export function CompaniesTable({
                     </TableRow>
                     {expandedRows.has(company.id) && company.context && (
                       <TableRow>
-                        <TableCell colSpan={9} className="bg-muted/50">
+                        <TableCell colSpan={10} className="bg-muted/50">
                           <div className="p-4">
                             <div className="flex items-start gap-2">
                               <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -458,7 +574,7 @@ export function CompaniesTable({
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {!compact && totalPages > 1 && (
           <div className="flex items-center justify-between space-x-2 py-4">
             <div className="flex-1 text-sm text-muted-foreground">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}

@@ -7,9 +7,10 @@ import { useRouter } from "next/navigation";
 interface CompaniesTableWrapperProps {
   companies: any[];
   totalCount: number;
+  compact?: boolean;
 }
 
-export function CompaniesTableWrapper({ companies, totalCount }: CompaniesTableWrapperProps) {
+export function CompaniesTableWrapper({ companies, totalCount, compact = false }: CompaniesTableWrapperProps) {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   
@@ -41,6 +42,7 @@ export function CompaniesTableWrapper({ companies, totalCount }: CompaniesTableW
       onPageChange={handlePageChange}
       onFilterChange={handleFilterChange}
       onExport={handleExport}
+      compact={compact}
     />
   );
 }

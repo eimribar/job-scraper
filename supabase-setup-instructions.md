@@ -3,7 +3,7 @@
 ## Quick Setup
 
 1. **Open Supabase SQL Editor:**
-   https://supabase.com/dashboard/project/adbcghllcrmcbdunwras/sql/new
+   https://supabase.com/dashboard/project/nslcadgicgkncajoyyno/sql/new
 
 2. **Copy the entire contents** of `migrations/enhanced-schema.sql`
 
@@ -81,4 +81,4 @@ After successful setup:
 ## Direct SQL Link
 
 Click here to go directly to the SQL editor:
-https://supabase.com/dashboard/project/adbcghllcrmcbdunwras/sql/new
+https://supabase.com/dashboard/project/nslcadgicgkncajoyyno/sql/new

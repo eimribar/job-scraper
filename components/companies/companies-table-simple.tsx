@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { ExternalLink, Download, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { ToolIcon } from '@/components/tool-logos';
 
 interface Company {
   id: string;
@@ -83,16 +84,7 @@ export function CompaniesTable({
   const hasActiveFilters = toolFilter !== 'all' || searchTerm;
 
   const getToolBadge = (tool: string) => {
-    if (tool === 'Outreach.io') {
-      return <span className="text-green-600 font-medium">🎯 Outreach</span>;
-    }
-    if (tool === 'SalesLoft') {
-      return <span className="text-blue-600 font-medium">⚡ SalesLoft</span>;
-    }
-    if (tool === 'Both') {
-      return <span className="text-purple-600 font-medium">🎯⚡ Both</span>;
-    }
-    return <span>{tool}</span>;
+    return <ToolIcon tool={tool} showText={false} />;
   };
 
   // Get tool statistics

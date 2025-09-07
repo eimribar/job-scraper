@@ -1,6 +1,7 @@
 import { ScraperService } from './scraperService';
 import { AnalysisService } from './analysisService';
 import { DataService } from './dataService';
+import { GPT5AnalysisService } from './gpt5AnalysisService';
 
 export interface ProcessingStats {
   searchTerm: string;
@@ -10,12 +11,19 @@ export interface ProcessingStats {
   failed: number;
   startTime: Date;
   endTime?: Date;
+  // Additional fields for autoScrapingScheduler compatibility
+  jobsScraped?: number;
+  jobsAnalyzed?: number;
+  companiesFound?: number;
+  outreachCompanies?: number;
+  salesloftCompanies?: number;
 }
 
 export class JobProcessor {
   private scraperService: ScraperService;
   private analysisService: AnalysisService;
   private dataService: DataService;
+  private gpt5Service: GPT5AnalysisService;
   private isProcessing: boolean = false;
   private currentStats: ProcessingStats | null = null;
 
@@ -23,6 +31,7 @@ export class JobProcessor {
     this.scraperService = new ScraperService();
     this.analysisService = new AnalysisService();
     this.dataService = new DataService();
+    this.gpt5Service = new GPT5AnalysisService();
   }
 
   /**
@@ -103,7 +112,7 @@ export class JobProcessor {
 
       // Step 3: Save all NEW jobs marked as ready for analysis
       if (stats.newJobs > 0) {
-        console.log('💾 Saving jobs to database for analysis...');
+        console.log('💾 Saving jobs to database...');
         
         try {
           // Save all new jobs in batches
@@ -119,14 +128,145 @@ export class JobProcessor {
             }
           }
           
-          stats.analyzed = newJobs.length; // All jobs are ready for analysis
-          console.log(`📊 Successfully saved ${newJobs.length} jobs ready for analysis`);
+          console.log(`📊 Successfully saved ${newJobs.length} jobs to database`);
           
         } catch (saveError) {
           console.error('❌ Failed to save jobs:', saveError);
           stats.failed = newJobs.length;
           throw saveError;
         }
+        
+        // Step 4: Analyze jobs with GPT-5
+        console.log('\n🔬 Starting GPT-5 analysis of jobs...');
+        
+        // Create notification for analysis start
+        await this.createNotification(
+          'analysis_started',
+          `Analyzing ${newJobs.length} jobs`,
+          `Starting GPT-5 analysis for "${searchTerm}"`,
+          { search_term: searchTerm, jobs_count: newJobs.length }
+        );
+        
+        let companiesFound = 0;
+        let outreachCount = 0;
+        let salesloftCount = 0;
+        let bothCount = 0;
+        let jobsAnalyzed = 0;
+        
+        for (const job of newJobs) {
+          try {
+            process.stdout.write(`  [${jobsAnalyzed + 1}/${newJobs.length}] Analyzing ${job.company}... `);
+            
+            // Analyze job with GPT-5
+            const analysis = await this.gpt5Service.analyzeJob(job);
+            
+            // If tool detected, save to identified_companies
+            if (analysis.uses_tool && analysis.tool_detected !== 'none') {
+              // Check if company already exists
+              const existingCompanies = await this.dataService.getIdentifiedCompanies(1, 0, undefined, undefined, job.company);
+              const exists = existingCompanies.some(c => 
+                c.company?.toLowerCase() === job.company.toLowerCase() && 
+                c.tool_detected === analysis.tool_detected
+              );
+              
+              if (!exists) {
+                await this.dataService.saveIdentifiedCompany({
+                  job_id: job.job_id,
+                  platform: job.platform,
+                  company: job.company,
+                  job_title: job.job_title,
+                  location: job.location,
+                  description: job.description,
+                  job_url: job.job_url,
+                  scraped_date: job.scraped_date,
+                  search_term: job.search_term,
+                  analysis: {
+                    uses_tool: analysis.uses_tool,
+                    tool_detected: analysis.tool_detected,
+                    signal_type: analysis.signal_type,
+                    context: analysis.context,
+                    confidence: analysis.confidence
+                  },
+                  analysis_date: new Date().toISOString()
+                });
+                
+                companiesFound++;
+                if (analysis.tool_detected === 'Outreach.io') outreachCount++;
+                else if (analysis.tool_detected === 'SalesLoft') salesloftCount++;
+                else if (analysis.tool_detected === 'Both') {
+                  bothCount++;
+                  outreachCount++;
+                  salesloftCount++;
+                }
+                
+                console.log(`✅ Found ${analysis.tool_detected}`);
+                
+                // Create notification for company discovery
+                await this.createNotification(
+                  'company_discovered',
+                  `Found: ${job.company}`,
+                  `${job.company} uses ${analysis.tool_detected}`,
+                  { 
+                    company: job.company,
+                    tool: analysis.tool_detected,
+                    job_title: job.job_title,
+                    search_term: searchTerm
+                  }
+                );
+              } else {
+                console.log('⏭️ Already identified');
+              }
+            } else {
+              console.log('❌ No tool detected');
+            }
+            
+            // Mark job as processed
+            await this.dataService.markJobAsProcessed(job.job_id);
+            jobsAnalyzed++;
+            
+            // Rate limiting - 2 second delay between API calls
+            await this.delay(2000);
+            
+          } catch (analysisError) {
+            console.error(`\n  ❌ Failed to analyze job ${job.job_id}:`, analysisError);
+            stats.failed++;
+          }
+        }
+        
+        stats.analyzed = jobsAnalyzed;
+        stats.companiesFound = companiesFound;
+        stats.outreachCompanies = outreachCount;
+        stats.salesloftCompanies = salesloftCount;
+        
+        console.log(`\n✅ Analysis complete:`);
+        console.log(`  - Jobs analyzed: ${jobsAnalyzed}`);
+        console.log(`  - Companies found: ${companiesFound}`);
+        console.log(`  - Outreach.io: ${outreachCount}`);
+        console.log(`  - SalesLoft: ${salesloftCount}`);
+        if (bothCount > 0) {
+          console.log(`  - Using both tools: ${bothCount}`);
+        }
+        
+        // Create notification for analysis completion
+        await this.createNotification(
+          'analysis_complete',
+          `Analysis complete: ${searchTerm}`,
+          `Analyzed ${jobsAnalyzed} jobs, found ${companiesFound} new companies (${outreachCount} Outreach, ${salesloftCount} SalesLoft)`,
+          {
+            search_term: searchTerm,
+            jobs_analyzed: jobsAnalyzed,
+            companies_found: companiesFound,
+            outreach_companies: outreachCount,
+            salesloft_companies: salesloftCount,
+            both_tools: bothCount
+          }
+        );
+      } else {
+        // No new jobs to analyze
+        stats.analyzed = 0;
+        stats.companiesFound = 0;
+        stats.outreachCompanies = 0;
+        stats.salesloftCompanies = 0;
       }
 
       // Step 4: Update search term status
@@ -142,6 +282,11 @@ export class JobProcessor {
       console.log(`  - Analyzed: ${stats.analyzed}`);
       console.log(`  - Failed: ${stats.failed}`);
       console.log(`  - Duration: ${Math.round(duration)} seconds (${Math.round(duration/60)} minutes)`);
+      
+      // Add compatibility fields for autoScrapingScheduler
+      stats.jobsScraped = stats.totalScraped;
+      stats.jobsAnalyzed = stats.analyzed;
+      // companiesFound, outreachCompanies, salesloftCompanies are already set above
       
       return stats;
       
@@ -234,6 +379,32 @@ export class JobProcessor {
    */
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Create a notification for the live activity feed
+   */
+  private async createNotification(
+    type: string,
+    title: string,
+    message: string,
+    metadata?: any
+  ): Promise<void> {
+    try {
+      const { createApiSupabaseClient } = await import('../supabase');
+      const supabase = createApiSupabaseClient();
+      
+      await supabase
+        .from('notifications')
+        .insert({
+          type,
+          title,
+          message,
+          metadata: metadata || {}
+        });
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
   }
 }
 

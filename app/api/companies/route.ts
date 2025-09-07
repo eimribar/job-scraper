@@ -13,35 +13,31 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const source = searchParams.get('source') || undefined; // 'google_sheets', 'job_analysis', or undefined for all
     const excludeGoogleSheets = searchParams.get('excludeGoogleSheets') === 'true';
+    const leadStatus = searchParams.get('leadStatus') as 'all' | 'with_leads' | 'without_leads' | undefined;
     
     const offset = (page - 1) * limit;
 
     // Initialize data service
     const dataService = new DataService();
 
-    // Get companies with filters including source
+    // Get companies with filters including source and lead status
     let companies = await dataService.getIdentifiedCompanies(
       limit, 
       offset, 
       tool, 
       confidence,
-      excludeGoogleSheets ? 'job_analysis' : source
+      search,
+      leadStatus
     );
     
-    // Apply search filter if provided (client-side for now, could be moved to database)
-    if (search) {
-      const searchLower = search.toLowerCase();
-      companies = companies.filter(company => 
-        company.company_name.toLowerCase().includes(searchLower) ||
-        company.job_title.toLowerCase().includes(searchLower)
-      );
-    }
+    // Search is now handled by the database query, no need for client-side filtering
 
-    // Get total count with same filters including source
+    // Get total count with same filters including source and lead status
     const totalCount = await dataService.getIdentifiedCompaniesCount(
       tool, 
       confidence,
-      excludeGoogleSheets ? 'job_analysis' : source
+      search,
+      leadStatus
     );
 
     return NextResponse.json({
@@ -61,6 +57,7 @@ export async function GET(request: NextRequest) {
         search,
         source: excludeGoogleSheets ? 'job_analysis' : source,
         excludeGoogleSheets,
+        leadStatus,
       },
     });
 

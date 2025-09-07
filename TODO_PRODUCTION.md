@@ -32,7 +32,7 @@ curl http://localhost:3001/api/stats
 
 ### ✅ **1.2 Supabase Service Role Key** ⚠️ **CRITICAL**
 - [ ] Go to [Supabase Dashboard](https://supabase.com/dashboard)
-- [ ] Select project: `adbcghllcrmcbdunwras`  
+- [ ] Select project: `nslcadgicgkncajoyyno`  
 - [ ] Navigate: Settings → API
 - [ ] Copy the `service_role` key (NOT the anon key)
 - [ ] Add to `.env.local` as `SUPABASE_SERVICE_ROLE_KEY`
@@ -51,8 +51,8 @@ Create `production-env.txt` with these values:
 ```
 OPENAI_API_KEY=[YOUR_OPENAI_API_KEY]
 APIFY_TOKEN=[YOUR_APIFY_TOKEN]
-NEXT_PUBLIC_SUPABASE_URL=https://adbcghllcrmcbdunwras.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkYmNnaGxsY3JtY2JkdW53cmFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYyMDc3NTksImV4cCI6MjA3MTc4Mzc1OX0.4xRHM7fokLsFqybYOh-i1eZ77azy0zABTwuF7SqRHCs
+NEXT_PUBLIC_SUPABASE_URL=https://nslcadgicgkncajoyyno.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zbGNhZGdpY2drbmNham95eW5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MTEyNTEsImV4cCI6MjA3MjM4NzI1MX0.VygboFJPF_vMdcxVyUVc10IXXmZmSShxbNZfXxng4MA
 SUPABASE_SERVICE_ROLE_KEY=[PASTE FROM STEP 1.2]
 OPENAI_MODEL=gpt-5-mini-2025-08-07
 NODE_ENV=production

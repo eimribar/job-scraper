@@ -62,6 +62,11 @@ export class DataService {
   // RAW JOBS MANAGEMENT
   // ================================================
 
+  // Alias for backward compatibility with jobProcessor
+  async saveJobsReadyForAnalysis(jobs: ScrapedJob[]): Promise<void> {
+    return this.saveRawJobs(jobs);
+  }
+
   async saveRawJobs(jobs: ScrapedJob[]): Promise<void> {
     if (jobs.length === 0) {
       console.log('saveRawJobs: No jobs to save (empty array)');
@@ -86,8 +91,8 @@ export class DataService {
         job_url: job.job_url,
         scraped_date: job.scraped_date,
         search_term: job.search_term,
-        processed: false,
-        processed_date: null
+        processed: false
+        // Note: processed_date column doesn't exist in raw_jobs table
       })), { onConflict: 'job_id' });
 
     if (error) {
@@ -120,7 +125,7 @@ export class DataService {
       .from('raw_jobs')
       .update({ 
         processed: true,
-        processed_date: new Date().toISOString()
+        analyzed_date: new Date().toISOString()
       })
       .eq('job_id', jobId);
 
@@ -150,7 +155,7 @@ export class DataService {
     const { error } = await this.supabase
       .from('identified_companies')
       .upsert({
-        company_name: analyzedJob.company,
+        company: analyzedJob.company, // Use 'company' not 'company_name'
         tool_detected: analyzedJob.analysis.tool_detected,
         signal_type: analyzedJob.analysis.signal_type,
         context: analyzedJob.analysis.context,
@@ -161,7 +166,7 @@ export class DataService {
         platform: analyzedJob.platform,
         identified_date: analyzedJob.analysis_date,
       }, { 
-        onConflict: 'company_name,tool_detected',
+        onConflict: 'company,tool_detected',
         ignoreDuplicates: false 
       });
 
@@ -176,7 +181,8 @@ export class DataService {
     offset: number = 0,
     tool?: string,
     confidence?: string,
-    search?: string
+    search?: string,
+    leadStatus?: 'all' | 'with_leads' | 'without_leads'
   ): Promise<any[]> {
     if (!this.isConfigured || !this.supabase) {
       console.warn('DataService not configured - returning empty companies list');
@@ -201,7 +207,14 @@ export class DataService {
 
     // Add search filter
     if (search) {
-      query = query.ilike('company_name', `%${search}%`);
+      query = query.ilike('company', `%${search}%`);
+    }
+
+    // Add lead status filter
+    if (leadStatus === 'with_leads') {
+      query = query.eq('leads_generated', true);
+    } else if (leadStatus === 'without_leads') {
+      query = query.or('leads_generated.is.null,leads_generated.eq.false');
     }
 
     const { data, error } = await query;
@@ -219,11 +232,19 @@ export class DataService {
       context: c.context,
       job_title: c.job_title,
       job_url: c.job_url,
-      identified_date: c.identified_date
+      identified_date: c.identified_date,
+      leads_generated: c.leads_generated || false,
+      leads_generated_date: c.leads_generated_date,
+      leads_generated_by: c.leads_generated_by,
+      lead_gen_notes: c.lead_gen_notes,
+      tier: c.tier,
+      sponsor_1: c.sponsor_1,
+      sponsor_2: c.sponsor_2,
+      rep_sdr_bdr: c.rep_sdr_bdr
     })) || [];
   }
 
-  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string): Promise<number> {
+  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string, leadStatus?: 'all' | 'with_leads' | 'without_leads'): Promise<number> {
     if (!this.isConfigured || !this.supabase) {
       console.warn('DataService not configured - returning 0 count');
       return 0;
@@ -242,7 +263,14 @@ export class DataService {
     }
 
     if (search) {
-      query = query.ilike('company_name', `%${search}%`);
+      query = query.ilike('company', `%${search}%`);
+    }
+
+    // Add lead status filter for count
+    if (leadStatus === 'with_leads') {
+      query = query.eq('leads_generated', true);
+    } else if (leadStatus === 'without_leads') {
+      query = query.or('leads_generated.is.null,leads_generated.eq.false');
     }
 
     const { count, error } = await query;
@@ -261,7 +289,7 @@ export class DataService {
 
   async getActiveSearchTerms(): Promise<any[]> {
     const { data, error } = await this.supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('*')
       .eq('is_active', true)
       .order('search_term');
@@ -276,7 +304,7 @@ export class DataService {
 
   async updateSearchTermLastScraped(searchTerm: string, jobsFound: number): Promise<void> {
     const { error } = await this.supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .update({
         last_scraped_date: new Date().toISOString(),
         jobs_found_count: jobsFound,
@@ -313,8 +341,14 @@ export class DataService {
 
       if (companiesError) throw companiesError;
 
-      const outreachCount = companies?.filter(c => c.tool_detected === 'Outreach.io' || c.tool_detected === 'Both').length || 0;
-      const salesLoftCount = companies?.filter(c => c.tool_detected === 'SalesLoft' || c.tool_detected === 'Both').length || 0;
+      // Count companies by tool accurately
+      const outreachOnly = companies?.filter(c => c.tool_detected === 'Outreach.io').length || 0;
+      const salesLoftOnly = companies?.filter(c => c.tool_detected === 'SalesLoft').length || 0;
+      const bothTools = companies?.filter(c => c.tool_detected === 'Both').length || 0;
+      
+      // These counts include companies using both tools
+      const outreachCount = outreachOnly + bothTools;
+      const salesLoftCount = salesLoftOnly + bothTools;
       const totalCompanies = companies?.length || 0;
 
       // Get recent discoveries (last 24 hours)
@@ -353,6 +387,7 @@ export class DataService {
         totalCompanies,
         outreachCount,
         salesLoftCount,
+        bothCount: bothTools,
         recentDiscoveries,
         jobsProcessedToday: jobsProcessedToday || 0,
       };
@@ -405,6 +440,110 @@ export class DataService {
   // ================================================
   // EXPORT FUNCTIONALITY
   // ================================================
+
+  // ================================================
+  // LEAD TRACKING FUNCTIONALITY
+  // ================================================
+
+  async updateLeadStatus(
+    companyId: string,
+    leadsGenerated: boolean,
+    notes?: string,
+    generatedBy?: string
+  ): Promise<void> {
+    const updateData: any = {
+      leads_generated: leadsGenerated
+    };
+
+    if (leadsGenerated) {
+      updateData.leads_generated_date = new Date().toISOString();
+      updateData.leads_generated_by = generatedBy || 'Manual Update';
+      if (notes) {
+        updateData.lead_gen_notes = notes;
+      }
+    } else {
+      // If marking as no leads, clear the date and by fields
+      updateData.leads_generated_date = null;
+      updateData.leads_generated_by = null;
+      updateData.lead_gen_notes = null;
+    }
+
+    const { error } = await this.supabase
+      .from('identified_companies')
+      .update(updateData)
+      .eq('id', companyId);
+
+    if (error) {
+      console.error('Error updating lead status:', error);
+      throw error;
+    }
+  }
+
+  async bulkUpdateLeadStatus(
+    companyIds: string[],
+    leadsGenerated: boolean,
+    generatedBy?: string
+  ): Promise<void> {
+    const updateData: any = {
+      leads_generated: leadsGenerated
+    };
+
+    if (leadsGenerated) {
+      updateData.leads_generated_date = new Date().toISOString();
+      updateData.leads_generated_by = generatedBy || 'Bulk Update';
+    } else {
+      updateData.leads_generated_date = null;
+      updateData.leads_generated_by = null;
+    }
+
+    const { error } = await this.supabase
+      .from('identified_companies')
+      .update(updateData)
+      .in('id', companyIds);
+
+    if (error) {
+      console.error('Error bulk updating lead status:', error);
+      throw error;
+    }
+  }
+
+  async getLeadStats(): Promise<{
+    totalCompanies: number;
+    companiesWithLeads: number;
+    companiesWithoutLeads: number;
+    leadCoverage: number;
+    recentLeadUpdates: any[];
+  }> {
+    // Get total companies
+    const { count: totalCompanies } = await this.supabase
+      .from('identified_companies')
+      .select('*', { count: 'exact', head: true });
+
+    // Get companies with leads
+    const { count: companiesWithLeads } = await this.supabase
+      .from('identified_companies')
+      .select('*', { count: 'exact', head: true })
+      .eq('leads_generated', true);
+
+    // Get recent lead updates
+    const { data: recentUpdates } = await this.supabase
+      .from('identified_companies')
+      .select('company, leads_generated_date, leads_generated_by')
+      .eq('leads_generated', true)
+      .order('leads_generated_date', { ascending: false })
+      .limit(10);
+
+    const companiesWithoutLeads = (totalCompanies || 0) - (companiesWithLeads || 0);
+    const leadCoverage = totalCompanies ? Math.round(((companiesWithLeads || 0) / totalCompanies) * 100) : 0;
+
+    return {
+      totalCompanies: totalCompanies || 0,
+      companiesWithLeads: companiesWithLeads || 0,
+      companiesWithoutLeads,
+      leadCoverage,
+      recentLeadUpdates: recentUpdates || []
+    };
+  }
 
   async exportIdentifiedCompanies(
     tool?: string,
