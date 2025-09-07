@@ -1,7 +1,7 @@
 import { DataService } from "@/lib/services/dataService";
 import { CompaniesClient } from "./companies-client";
 import { AppHeader } from "@/components/navigation/app-header";
-import { QuickStats } from "@/components/dashboard/quick-stats";
+import { QuickStatsOptimized } from "@/components/dashboard/quick-stats-optimized";
 
 // Enable real-time data updates by disabling Next.js caching
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,7 @@ interface CompaniesPageProps {
     page?: string;
     tool?: string;
     search?: string;
+    leadStatus?: string;
   };
 }
 
@@ -74,7 +75,7 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
       <div className="container mx-auto px-6 py-4 space-y-4">
         {/* Quick Stats */}
         <section>
-          <QuickStats />
+          <QuickStatsOptimized />
         </section>
 
         {/* Companies Table */}
@@ -101,4 +102,52 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
       </div>
     );
   }
+}
+
+// Loading skeleton for better perceived performance
+function CompaniesPageSkeleton() {
+  return (
+    <>
+      {/* Page Header Skeleton */}
+      <div className="border-b bg-white/70 backdrop-blur-md">
+        <div className="container mx-auto px-6 py-4">
+          <div className="space-y-2">
+            <div className="h-7 bg-slate-200 rounded w-64 animate-pulse" />
+            <div className="h-4 bg-slate-200 rounded w-96 animate-pulse" />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Skeleton */}
+      <div className="container mx-auto px-6 py-4 space-y-4">
+        {/* Quick Stats Skeleton */}
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white rounded-xl border p-4 animate-pulse">
+              <div className="h-4 bg-slate-200 rounded w-3/4 mb-3" />
+              <div className="h-8 bg-slate-200 rounded w-1/2 mb-2" />
+              <div className="h-3 bg-slate-200 rounded w-2/3" />
+            </div>
+          ))}
+        </div>
+
+        {/* Table Skeleton */}
+        <div className="bg-white rounded-xl border">
+          <div className="p-6">
+            <div className="h-6 bg-slate-200 rounded w-48 mb-4 animate-pulse" />
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="flex items-center space-x-4">
+                  <div className="h-4 bg-slate-200 rounded w-32 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded w-20 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded flex-1 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }

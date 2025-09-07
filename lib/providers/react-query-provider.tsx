@@ -3,28 +3,38 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 
+// Performance-optimized query client configuration
 const queryClientOptions = {
   defaultOptions: {
     queries: {
-      // Stale time - data is fresh for 30 seconds
-      staleTime: 30 * 1000,
-      // Cache time - keep unused data for 5 minutes
-      gcTime: 5 * 60 * 1000,
-      // Retry failed requests
+      // Aggressive caching for better performance
+      staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh longer
+      gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache longer
+      
+      // Reduce network requests
+      refetchOnWindowFocus: false, // Disable aggressive refetching
+      refetchOnMount: true, // Still refetch on component mount
+      refetchOnReconnect: true, // Refetch when network reconnects
+      
+      // Smart retry logic
       retry: (failureCount: number, error: any) => {
-        // Don't retry for 400-499 errors
+        // Don't retry for 400-499 errors (client errors)
         if (error?.status >= 400 && error?.status < 500) {
           return false;
         }
-        return failureCount < 3;
+        // Don't retry more than 2 times for better UX
+        return failureCount < 2;
       },
-      // Refetch on window focus
-      refetchOnWindowFocus: true,
-      // Background refetch interval for live data
-      refetchInterval: 30 * 1000, // 30 seconds
+      
+      // Remove background refetch interval for performance
+      // Individual hooks can override this when needed
+      refetchInterval: false,
     },
     mutations: {
+      // Quick retry for mutations
       retry: 1,
+      // Network timeout for mutations
+      networkMode: 'online',
     },
   },
 };

@@ -3,12 +3,31 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, Zap, Settings, Activity, Building2, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePrefetchCompanies, usePrefetchDashboardStats } from "@/lib/hooks/useCompanies";
 
 export function AppHeader() {
   const pathname = usePathname();
+  const prefetchCompanies = usePrefetchCompanies();
+  const prefetchDashboardStats = usePrefetchDashboardStats();
+  
+  // Prefetch data for instant navigation
+  useEffect(() => {
+    // Prefetch companies page data
+    prefetchCompanies({ page: 1, limit: 50 });
+    
+    // Prefetch dashboard stats
+    prefetchDashboardStats();
+    
+    // Prefetch different filter combinations that users commonly use
+    prefetchCompanies({ page: 1, limit: 50, tool: 'outreach' });
+    prefetchCompanies({ page: 1, limit: 50, tool: 'salesloft' });
+    prefetchCompanies({ page: 1, limit: 50, leadStatus: 'with_leads' });
+    prefetchCompanies({ page: 1, limit: 50, leadStatus: 'without_leads' });
+  }, [prefetchCompanies, prefetchDashboardStats]);
   
   return (
     <header className="border-b bg-white/70 backdrop-blur-md sticky top-0 z-50 shadow-sm">
@@ -45,12 +64,12 @@ export function AppHeader() {
           </div>
           
           <nav className="flex items-center gap-1">
-            <Link href="/">
+            <Link href="/" prefetch={true}>
               <Button 
                 variant={pathname === '/' ? 'secondary' : 'ghost'} 
                 size="sm" 
                 className={cn(
-                  "gap-2",
+                  "gap-2 transition-all duration-150",
                   pathname === '/' ? "bg-slate-100 text-slate-900 hover:bg-slate-200" : "hover:bg-slate-50"
                 )}
               >
@@ -59,12 +78,12 @@ export function AppHeader() {
               </Button>
             </Link>
             
-            <Link href="/companies">
+            <Link href="/companies" prefetch={true}>
               <Button 
                 variant={pathname === '/companies' ? 'secondary' : 'ghost'} 
                 size="sm" 
                 className={cn(
-                  "gap-2",
+                  "gap-2 transition-all duration-150",
                   pathname === '/companies' ? "bg-slate-100 text-slate-900 hover:bg-slate-200" : "hover:bg-slate-50"
                 )}
               >
@@ -73,12 +92,12 @@ export function AppHeader() {
               </Button>
             </Link>
             
-            <Link href="/automation">
+            <Link href="/automation" prefetch={true}>
               <Button 
                 variant={pathname === '/automation' ? 'default' : 'ghost'} 
                 size="sm" 
                 className={cn(
-                  "gap-2",
+                  "gap-2 transition-all duration-150",
                   pathname === '/automation' ? "bg-gradient-to-r from-purple-600 to-pink-600" : "hover:bg-purple-50"
                 )}
               >
@@ -87,12 +106,12 @@ export function AppHeader() {
               </Button>
             </Link>
             
-            <Link href="/settings">
+            <Link href="/settings" prefetch={true}>
               <Button 
                 variant={pathname === '/settings' ? 'default' : 'ghost'} 
                 size="icon" 
                 className={cn(
-                  "h-8 w-8",
+                  "h-8 w-8 transition-all duration-150",
                   pathname === '/settings' ? "bg-gradient-to-r from-slate-600 to-slate-700" : "hover:bg-slate-100"
                 )}
               >

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ReactQueryProvider } from "@/lib/providers/react-query-provider";
+import { ToastContainer } from "@/components/ui/toast";
+import { MinimalNavigationProgress } from "@/components/ui/navigation-progress";
 import "./globals.css";
 
 const inter = Inter({ 
@@ -33,9 +35,11 @@ export default function RootLayout({
         <meta name="color-scheme" content="light" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <MinimalNavigationProgress />
         <ReactQueryProvider>
           <div className="relative min-h-screen">
             {children}
+            <ToastContainer />
           </div>
         </ReactQueryProvider>
         

@@ -1,12 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { useDebounce } from 'use-debounce';
+import { showToast } from "@/components/ui/toast";
 import {
   Table,
   TableBody,
@@ -26,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles, X, Filter, Home, ChevronRight, CheckCircle2, Circle, Users } from "lucide-react";
+import { ExternalLink, Download, Search, Info, ChevronDown, ChevronUp, Sparkles, X, Filter, Home, ChevronRight, CheckCircle2, Circle, Users, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ToolIcon } from '@/components/tool-logos';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -60,7 +56,11 @@ interface CompaniesTableProps {
   onPageChange: (page: number) => void;
   onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string }) => void;
   onExport: () => void;
+  onLeadStatusUpdate?: (companyId: string, leadsGenerated: boolean) => void;
   compact?: boolean;
+  isLoading?: boolean;
+  searchTerm?: string;
+  onSearchChange?: (search: string) => void;
 }
 
 export function CompaniesTable({
@@ -70,10 +70,22 @@ export function CompaniesTable({
   onPageChange,
   onFilterChange,
   onExport,
+  onLeadStatusUpdate,
   compact = false,
+  isLoading = false,
+  searchTerm: externalSearchTerm,
+  onSearchChange,
 }: CompaniesTableProps) {
   const [toolFilter, setToolFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState(externalSearchTerm || '');
+  const [debouncedSearchTerm] = useDebounce(internalSearchTerm, 300);
+  
+  // Sync internal search state with external prop
+  useEffect(() => {
+    if (externalSearchTerm !== undefined) {
+      setInternalSearchTerm(externalSearchTerm);
+    }
+  }, [externalSearchTerm]);
   const [leadFilter, setLeadFilter] = useState<string>('all');
   const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
   const [sourceFilter, setSourceFilter] = useState<'all' | 'new' | 'imported'>('all');
@@ -103,21 +115,32 @@ export function CompaniesTable({
     const filterToUse = newSourceFilter !== undefined ? newSourceFilter : sourceFilter;
     onFilterChange({
       tool: toolFilter === 'all' ? undefined : toolFilter,
-      search: searchTerm || undefined,
+      search: debouncedSearchTerm || undefined,
       excludeGoogleSheets: filterToUse === 'new',
       leadStatus: leadFilter === 'all' ? undefined : leadFilter,
     });
   };
+  
+  // Handle search change with external callback or internal filter
+  useEffect(() => {
+    if (onSearchChange) {
+      // If external callback provided, use it for search
+      onSearchChange(debouncedSearchTerm);
+    } else if (debouncedSearchTerm !== internalSearchTerm) {
+      // Otherwise use internal filter logic
+      handleFilterChange();
+    }
+  }, [debouncedSearchTerm, onSearchChange]);
 
   const clearAllFilters = () => {
     setToolFilter('all');
-    setSearchTerm('');
+    setInternalSearchTerm('');
     setSourceFilter('all');
     setLeadFilter('all');
     onFilterChange({});
   };
 
-  const hasActiveFilters = toolFilter !== 'all' || searchTerm || sourceFilter !== 'all' || leadFilter !== 'all';
+  const hasActiveFilters = toolFilter !== 'all' || debouncedSearchTerm || sourceFilter !== 'all' || leadFilter !== 'all';
 
   const getToolBadge = (tool: string) => {
     return <ToolIcon tool={tool} showText={false} />;
@@ -138,7 +161,34 @@ export function CompaniesTable({
 
   // Confidence badge removed - not in current data model
 
+  // Local state for companies that persists changes
+  const [localCompanies, setLocalCompanies] = useState(companies);
+  
+  // Update local state when props change (new data from server)
+  useEffect(() => {
+    setLocalCompanies(companies);
+  }, [companies]);
+  
+  // Loading states
+  const [updatingCompanies, setUpdatingCompanies] = useState<Set<string>>(new Set());
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+
   const handleLeadStatusUpdate = async (companyId: string, leadsGenerated: boolean) => {
+    setUpdatingCompanies(prev => new Set(prev).add(companyId));
+    
+    // Immediately update local state for instant feedback
+    setLocalCompanies(prev => 
+      prev.map(company => 
+        company.id === companyId 
+          ? { ...company, leads_generated: leadsGenerated }
+          : company
+      )
+    );
+    
+    const loadingToast = showToast.loading(
+      leadsGenerated ? 'Marking as has leads...' : 'Marking as needs leads...'
+    );
+    
     try {
       const response = await fetch('/api/companies/update-lead-status', {
         method: 'POST',
@@ -151,16 +201,45 @@ export function CompaniesTable({
       });
 
       if (response.ok) {
-        // Refresh the page or update state
-        window.location.reload();
+        showToast.success(
+          leadsGenerated ? 'Company marked as has leads!' : 'Company marked as needs leads!'
+        );
+        // No reload needed - local state is already updated!
+      } else {
+        throw new Error('Update failed');
       }
     } catch (error) {
       console.error('Error updating lead status:', error);
+      // Revert local state on error
+      setLocalCompanies(prev => 
+        prev.map(company => 
+          company.id === companyId 
+            ? { ...company, leads_generated: !leadsGenerated }
+            : company
+        )
+      );
+      showToast.error('Failed to update lead status. Please try again.');
+    } finally {
+      setUpdatingCompanies(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(companyId);
+        return newSet;
+      });
     }
   };
 
   const handleBulkLeadUpdate = async (leadsGenerated: boolean) => {
     if (selectedCompanies.size === 0) return;
+    
+    setIsBulkUpdating(true);
+    const loadingToast = showToast.loading(
+      `Updating ${selectedCompanies.size} companies...`
+    );
+    
+    // Optimistic updates for all selected companies
+    Array.from(selectedCompanies).forEach(companyId => {
+      updateOptimisticCompanies({ id: companyId, leadsGenerated });
+    });
     
     try {
       const response = await fetch('/api/companies/update-lead-status', {
@@ -175,10 +254,19 @@ export function CompaniesTable({
 
       if (response.ok) {
         setSelectedCompanies(new Set());
-        window.location.reload();
+        showToast.success(`Successfully updated ${selectedCompanies.size} companies!`);
+      } else {
+        throw new Error('Bulk update failed');
       }
     } catch (error) {
       console.error('Error bulk updating lead status:', error);
+      // Revert all optimistic updates
+      Array.from(selectedCompanies).forEach(companyId => {
+        updateOptimisticCompanies({ id: companyId, leadsGenerated: !leadsGenerated });
+      });
+      showToast.error('Failed to update companies. Please try again.');
+    } finally {
+      setIsBulkUpdating(false);
     }
   };
 
@@ -219,9 +307,8 @@ export function CompaniesTable({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search companies..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleFilterChange()}
+                value={internalSearchTerm}
+                onChange={(e) => setInternalSearchTerm(e.target.value)}
                 className="pl-9 bg-white border-slate-200"
               />
             </div>
@@ -231,7 +318,7 @@ export function CompaniesTable({
             setToolFilter(value);
             onFilterChange({
               tool: value === 'all' ? undefined : value,
-              search: searchTerm || undefined,
+              search: debouncedSearchTerm || undefined,
               excludeGoogleSheets: sourceFilter === 'new',
               leadStatus: leadFilter === 'all' ? undefined : leadFilter,
             });
@@ -250,7 +337,7 @@ export function CompaniesTable({
             setLeadFilter(value);
             onFilterChange({
               tool: toolFilter === 'all' ? undefined : toolFilter,
-              search: searchTerm || undefined,
+              search: debouncedSearchTerm || undefined,
               excludeGoogleSheets: sourceFilter === 'new',
               leadStatus: value === 'all' ? undefined : value,
             });
@@ -289,18 +376,28 @@ export function CompaniesTable({
               size="sm"
               variant="outline"
               onClick={() => handleBulkLeadUpdate(true)}
+              disabled={isBulkUpdating}
               className="gap-2"
             >
-              <CheckCircle2 className="h-3 w-3" />
+              {isBulkUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3 w-3" />
+              )}
               Mark as Leads Generated
             </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={() => handleBulkLeadUpdate(false)}
+              disabled={isBulkUpdating}
               className="gap-2"
             >
-              <Circle className="h-3 w-3" />
+              {isBulkUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
               Mark as No Leads
             </Button>
             <Button
@@ -325,7 +422,7 @@ export function CompaniesTable({
                     checked={selectedCompanies.size === companies.length && companies.length > 0}
                     onCheckedChange={(checked) => {
                       if (checked) {
-                        setSelectedCompanies(new Set(companies.map(c => c.id)));
+                        setSelectedCompanies(new Set(optimisticCompanies.map(c => c.id)));
                       } else {
                         setSelectedCompanies(new Set());
                       }
@@ -344,7 +441,16 @@ export function CompaniesTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {companies.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="h-24 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <Loader2 className="h-8 w-8 text-muted-foreground mb-2 animate-spin" />
+                      <p className="text-muted-foreground">Loading companies...</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : companies.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center">
@@ -354,7 +460,7 @@ export function CompaniesTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                companies.map((company) => (
+                localCompanies.map((company) => (
                   <React.Fragment key={company.id}>
                     <TableRow className="hover:bg-muted/50 transition-colors">
                       <TableCell className="hidden sm:table-cell">
@@ -401,9 +507,12 @@ export function CompaniesTable({
                           size="sm"
                           className="h-8 w-8 p-0 transition-all hover:scale-110"
                           onClick={() => handleLeadStatusUpdate(company.id, !company.leads_generated)}
+                          disabled={updatingCompanies.has(company.id)}
                           title={company.leads_generated ? "Mark as needs leads" : "Mark as has leads"}
                         >
-                          {company.leads_generated ? (
+                          {updatingCompanies.has(company.id) ? (
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                          ) : company.leads_generated ? (
                             <CheckCircle2 className="h-5 w-5 text-green-600 hover:text-green-700" />
                           ) : (
                             <Circle className="h-5 w-5 text-muted-foreground hover:text-orange-600 transition-colors" />
@@ -424,18 +533,7 @@ export function CompaniesTable({
                         ) : '-'}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate hidden xl:table-cell">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-help">{company.job_title || '-'}</span>
-                            </TooltipTrigger>
-                            {company.job_title && (
-                              <TooltipContent className="max-w-[300px]">
-                                <p>{company.job_title}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
+                        <span className="text-sm">{company.job_title || '-'}</span>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline" className="text-xs">

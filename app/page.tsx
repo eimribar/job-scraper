@@ -1,6 +1,6 @@
 import { LiveActivityFeed } from "@/components/dashboard/live-activity-feed";
 import { ProcessingWidget } from "@/components/dashboard/processing-widget";
-import { QuickStats } from "@/components/dashboard/quick-stats";
+import { QuickStatsOptimized } from "@/components/dashboard/quick-stats-optimized";
 import { LeadCoverageWidget } from "@/components/dashboard/lead-coverage-widget";
 import { CompaniesTableWrapper } from "@/components/companies/companies-table-wrapper";
 import { DataService } from "@/lib/services/dataService";
@@ -32,9 +32,9 @@ export default async function Dashboard() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-3">
         <div className="space-y-3">
-          {/* Quick Stats */}
+          {/* Quick Stats - Now optimized with React Query */}
           <section>
-            <QuickStats />
+            <QuickStatsOptimized />
           </section>
 
           {/* Main Grid with hover effects */}
