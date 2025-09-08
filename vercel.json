@@ -29,6 +29,15 @@
     },
     "app/api/tier-one/route.ts": {
       "maxDuration": 30
+    },
+    "app/api/automation/status/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/automation/metrics/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/automation/trigger/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
