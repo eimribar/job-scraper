@@ -47,9 +47,10 @@ export async function POST(request: Request) {
     // 3. Check recent processing activity (last hour)
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     const { count: recentProcessing } = await supabase
-      .from('processed_jobs')
+      .from('raw_jobs')
       .select('*', { count: 'exact', head: true })
-      .gte('processed_date', oneHourAgo.toISOString());
+      .eq('processed', true)
+      .gte('analyzed_date', oneHourAgo.toISOString());
     
     checks.recentProcessing = (recentProcessing || 0) > 0;
 

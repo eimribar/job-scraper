@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     
     // Check database connectivity
     const { data: dbTest, error: dbError } = await supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('*', { count: 'exact', head: true })
       .limit(1);
     
@@ -25,14 +25,15 @@ export async function GET(request: NextRequest) {
     
     // Check if jobs were processed recently
     const { count: recentJobs } = await supabase
-      .from('processed_jobs')
+      .from('raw_jobs')
       .select('*', { count: 'exact', head: true })
-      .gte('processed_date', oneHourAgo.toISOString());
+      .eq('processed', true)
+      .gte('analyzed_date', oneHourAgo.toISOString());
     
     // Check if any search terms need scraping
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const { count: overdueTerms } = await supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
       .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);
