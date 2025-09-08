@@ -16,12 +16,21 @@ const hasValidConfig = supabaseUrl &&
 
 // For API routes - simple client without SSR/cookies
 export function createApiSupabaseClient() {
+  // During build time, return null to avoid cookie errors
+  if (process.env.NODE_ENV === 'production' && !global.window) {
+    return null;
+  }
+  
   if (!hasValidConfig) {
     // Return null during build time
     if (typeof window === 'undefined' && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return null;
     }
-    throw new Error('Supabase configuration is missing');
+    // Only throw in development or client-side
+    if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
+      console.warn('Supabase configuration is missing');
+    }
+    return null;
   }
   
   // Use service role key if available, otherwise use anon key

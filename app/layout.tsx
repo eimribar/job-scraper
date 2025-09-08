@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Suspense } from "react";
 import { ReactQueryProvider } from "@/lib/providers/react-query-provider";
 import { ToastContainer } from "@/components/ui/toast";
 import { MinimalNavigationProgress } from "@/components/ui/navigation-progress";
@@ -36,13 +37,21 @@ export default function RootLayout({
         <meta name="color-scheme" content="light" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <MinimalNavigationProgress />
+        <Suspense fallback={null}>
+          <MinimalNavigationProgress />
+        </Suspense>
         <ReactQueryProvider>
           <div className="relative min-h-screen">
             <Sidebar />
             {/* Main content area adjusted for sidebar */}
             <div className="ml-16 min-h-screen">
-              {children}
+              <Suspense fallback={
+                <div className="flex items-center justify-center min-h-screen">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              }>
+                {children}
+              </Suspense>
             </div>
             <ToastContainer />
           </div>
