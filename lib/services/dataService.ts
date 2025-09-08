@@ -92,7 +92,7 @@ export class DataService {
         scraped_date: job.scraped_date,
         search_term: job.search_term,
         processed: false
-        // Note: processed_date column doesn't exist in raw_jobs table
+        // Note: raw_jobs uses analyzed_date for when it was processed
       })), { onConflict: 'job_id' });
 
     if (error) {
@@ -139,7 +139,7 @@ export class DataService {
       .from('processed_jobs')
       .upsert({ 
         job_id: jobId, 
-        processed_date: new Date().toISOString() 
+        analyzed_date: new Date().toISOString() 
       }, { onConflict: 'job_id' });
   }
 

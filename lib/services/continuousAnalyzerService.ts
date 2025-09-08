@@ -259,7 +259,7 @@ Job Description: ${job.description}`;
               .from('raw_jobs')
               .update({ 
                 processed: true,
-                processed_date: new Date().toISOString()
+                analyzed_date: new Date().toISOString()
               })
               .eq('job_id', job.job_id);
             
@@ -271,7 +271,7 @@ Job Description: ${job.description}`;
                 .from('processed_jobs')
                 .upsert({ 
                   job_id: job.job_id, 
-                  processed_date: new Date().toISOString() 
+                  analyzed_date: new Date().toISOString() 
                 }, { onConflict: 'job_id' });
               
               processed++;
@@ -333,7 +333,7 @@ Job Description: ${job.description}`;
             .from('raw_jobs')
             .update({ 
               processed: true,
-              processed_date: new Date().toISOString()
+              analyzed_date: new Date().toISOString()
             })
             .eq('job_id', job.job_id);
           
@@ -346,7 +346,7 @@ Job Description: ${job.description}`;
               .from('processed_jobs')
               .upsert({ 
                 job_id: job.job_id, 
-                processed_date: new Date().toISOString() 
+                analyzed_date: new Date().toISOString() 
               }, { onConflict: 'job_id' });
             
             processed++;
