@@ -142,8 +142,7 @@ export class WeeklyScraperService {
         .from('raw_jobs')
         .insert(newJobs.map(job => ({
           ...job,
-          processed: false,
-          processed_date: null
+          processed: false
         })));
 
       if (error) {
