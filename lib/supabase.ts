@@ -17,7 +17,7 @@ const hasValidConfig = supabaseUrl &&
 // For API routes - simple client without SSR/cookies
 export function createApiSupabaseClient() {
   // During build time, return null to avoid cookie errors
-  if (process.env.NODE_ENV === 'production' && !global.window) {
+  if (process.env.NODE_ENV === 'production' && !global.window && typeof window === 'undefined') {
     return null;
   }
   
@@ -26,16 +26,29 @@ export function createApiSupabaseClient() {
     if (typeof window === 'undefined' && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
       return null;
     }
-    // Only throw in development or client-side
-    if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
-      console.warn('Supabase configuration is missing');
+    
+    // Log helpful error message in production
+    if (process.env.NODE_ENV === 'production') {
+      console.error('⚠️ Supabase configuration is missing!');
+      console.error('Please add the following environment variables in Vercel:');
+      console.error('- NEXT_PUBLIC_SUPABASE_URL');
+      console.error('- NEXT_PUBLIC_SUPABASE_ANON_KEY');
+      console.error('See .env.production.example for the exact values');
+    } else if (process.env.NODE_ENV === 'development') {
+      console.warn('Supabase configuration is missing - check .env.local');
     }
     return null;
   }
   
   // Use service role key if available, otherwise use anon key
   const key = supabaseServiceKey || supabaseAnonKey;
-  return createClient(supabaseUrl, key);
+  
+  try {
+    return createClient(supabaseUrl, key);
+  } catch (error) {
+    console.error('Failed to create Supabase client:', error);
+    return null;
+  }
 }
 
 // For server-side operations (with cookies)
