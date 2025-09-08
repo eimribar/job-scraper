@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     // 1. Check database connectivity
     try {
       const { error: dbError } = await supabase
-        .from('search_terms_clean')
+        .from('search_terms')
         .select('*', { count: 'exact', head: true })
         .limit(1);
       
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     // 5. Check overdue search terms
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const { count: overdueTerms } = await supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
       .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);

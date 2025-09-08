@@ -24,8 +24,8 @@ export class WeeklyScraperService {
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
     const { data: lastScrape } = await this.supabase
-      .from('search_terms_clean')
-      .select('search_term, last_scraped_date')
+      .from('search_terms')
+      .select('term, last_scraped_date')
       .not('last_scraped_date', 'is', null)
       .order('last_scraped_date', { ascending: true })
       .limit(1);
@@ -169,7 +169,7 @@ export class WeeklyScraperService {
       
       // Update search term status
       const { error: updateError } = await this.supabase
-        .from('search_terms_clean')
+        .from('search_terms')
         .update({
           last_scraped_date: new Date().toISOString(),
           jobs_found_count: jobs.length,
@@ -216,7 +216,7 @@ export class WeeklyScraperService {
     try {
       // Get all active search terms
       const { data: searchTerms } = await this.supabase
-        .from('search_terms_clean')
+        .from('search_terms')
         .select('search_term')
         .eq('is_active', true)
         .order('search_term');
@@ -285,7 +285,7 @@ export class WeeklyScraperService {
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
     const { data: overdueTerms, error } = await this.supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('search_term, last_scraped_date')
       .eq('is_active', true)
       .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`)
@@ -328,7 +328,7 @@ export class WeeklyScraperService {
         
         // Check how many terms still need processing
         const { count: remainingTerms } = await this.supabase
-          .from('search_terms_clean')
+          .from('search_terms')
           .select('*', { count: 'exact', head: true })
           .eq('is_active', true)
           .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);

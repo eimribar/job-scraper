@@ -91,7 +91,7 @@ export async function GET() {
     
     const supabase = (scraper as any).supabase;
     const { count: overdueCount } = await supabase
-      .from('search_terms_clean')
+      .from('search_terms')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
       .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);
