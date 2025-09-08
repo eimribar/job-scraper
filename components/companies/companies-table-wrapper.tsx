@@ -26,6 +26,7 @@ export function CompaniesTableWrapper({ companies, totalCount, compact = false }
     tool: searchParams.get('tool') || undefined,
     search: searchParams.get('search') || undefined,
     leadStatus: searchParams.get('leadStatus') || undefined,
+    tier: searchParams.get('tier') || undefined,
   }));
   
   // Update filters when URL changes
@@ -34,6 +35,7 @@ export function CompaniesTableWrapper({ companies, totalCount, compact = false }
       tool: searchParams.get('tool') || undefined,
       search: searchParams.get('search') || undefined,
       leadStatus: searchParams.get('leadStatus') || undefined,
+      tier: searchParams.get('tier') || undefined,
     });
     const page = searchParams.get('page');
     if (page) setCurrentPage(parseInt(page));
@@ -55,13 +57,14 @@ export function CompaniesTableWrapper({ companies, totalCount, compact = false }
     });
   }, [router, setNavigating]);
   
-  const handleFilterChange = useCallback((newFilters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string }) => {
+  const handleFilterChange = useCallback((newFilters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string; tier?: string }) => {
     // Build URL with filters
     const params = new URLSearchParams();
     if (newFilters.tool && newFilters.tool !== 'all') params.set('tool', newFilters.tool);
     if (newFilters.confidence && newFilters.confidence !== 'all') params.set('confidence', newFilters.confidence);
     if (newFilters.search) params.set('search', newFilters.search);
     if (newFilters.leadStatus && newFilters.leadStatus !== 'all') params.set('leadStatus', newFilters.leadStatus);
+    if (newFilters.tier && newFilters.tier !== 'all') params.set('tier', newFilters.tier);
     params.set('page', '1'); // Reset to first page on filter change
     
     const url = `/companies?${params.toString()}`;

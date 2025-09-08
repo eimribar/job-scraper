@@ -3,18 +3,18 @@
 ## Purpose
 This file contains critical context for AI assistants (Claude, ChatGPT, etc.) to continue development seamlessly.
 
-## Last Session: September 7, 2025
+## Last Session: September 8, 2025
 
 ### Session Summary
-**MAJOR PERFORMANCE OVERHAUL COMPLETED** - Transformed clunky navigation into lightning-fast, smooth user experience with 70% performance improvements, React Query integration, and zero page reloads for lead status updates. System now feels native and responsive.
+**TIER 1 COMPANIES SYSTEM COMPLETED** - Implemented comprehensive tier classification system with dedicated Tier 1 overview page. Fixed all functionality issues including filtering, lead status updates, pagination, and export. System now supports 188 Tier 1 priority companies with full visibility and management capabilities.
 
 ---
 
 ## 🎯 Project Overview
 
-**What**: Sales Tool Detector - Automated system to identify companies using Outreach.io or SalesLoft
-**Why**: Help SDR/GTM teams find prospects already using specific sales tools
-**How**: Analyze LinkedIn job descriptions with GPT-5 → Store in Supabase → Display in dashboard
+**What**: Sales Tool Detector - Automated system to identify companies using Outreach.io or SalesLoft with tier-based prioritization
+**Why**: Help SDR/GTM teams find prospects already using specific sales tools and prioritize Tier 1 targets
+**How**: Analyze LinkedIn job descriptions with GPT-5 → Store in Supabase → Display in dashboard with tier classification
 
 ### Key Requirements (CRITICAL - DO NOT CHANGE)
 1. **GPT-5-mini ONLY** - Never use GPT-4 or other models
@@ -22,6 +22,7 @@ This file contains critical context for AI assistants (Claude, ChatGPT, etc.) to
 3. **No confidence field** - Database schema doesn't include confidence column
 4. **Duplicate Prevention** - Check existence before insert (no unique constraint yet)
 5. **Simple Processor** - Use scripts/simple-processor.js for production
+6. **Tier Classification** - Maintain both tier_one_companies and identified_companies tables
 
 ---
 
@@ -38,7 +39,7 @@ This file contains critical context for AI assistants (Claude, ChatGPT, etc.) to
 - **Supabase client** for real-time data
 
 ### Backend
-- **Supabase** (PostgreSQL) - Main database
+- **Supabase** (PostgreSQL) - Main database with tier_one_companies table
 - **OpenAI GPT-5-mini** via Responses API
 - **Node.js** scripts for processing
 - **Google Sheets** integration (optional)
@@ -92,22 +93,30 @@ fetch('https://api.openai.com/v1/responses', {
 
 ---
 
-## 🚀 Current State (September 7, 2025)
+## 🚀 Current State (September 8, 2025)
 
 ### Database
-- **764 companies** identified total
+- **764+ companies** identified total
   - ~504 using Outreach.io
   - ~206 using SalesLoft  
   - ~11 using both tools
+- **188 Tier 1 companies** (priority targets)
+  - 64 identified (34% coverage)
+  - 124 unidentified (need research)
+  - 98 with leads generated
 - **13,628+ jobs** processed
 - **Processing active** and continuous
 
-### 🎯 Performance Achievements
-1. ✅ **70% faster navigation** - Client-side routing with aggressive caching
-2. ✅ **Zero page reloads** - Smooth lead status updates with local state
-3. ✅ **Instant UI feedback** - Buttons respond immediately to clicks
-4. ✅ **Smart prefetching** - Routes and data preloaded for instant navigation
-5. ✅ **Smooth transitions** - Navigation progress and loading indicators
+### 🎯 Major Features Completed
+1. ✅ **Tier 1 Classification System** - Full tier management with dedicated UI
+2. ✅ **70% faster navigation** - Client-side routing with aggressive caching
+3. ✅ **Zero page reloads** - Smooth lead status updates with local state
+4. ✅ **Instant UI feedback** - Buttons respond immediately to clicks
+5. ✅ **Smart prefetching** - Routes and data preloaded for instant navigation
+6. ✅ **Smooth transitions** - Navigation progress and loading indicators
+7. ✅ **Complete filtering** - Search, tool, tier, and lead status filters
+8. ✅ **Export functionality** - CSV export with all company data
+9. ✅ **Pagination** - Efficient data loading with 20 items per page
 
 ### 🔧 System Status
 - ✅ GPT-5 integration working perfectly
@@ -116,11 +125,35 @@ fetch('https://api.openai.com/v1/responses', {
 - ✅ Navigation progress indicators implemented
 - ✅ Local state management for instant updates
 - ✅ All optimistic updates working smoothly
+- ✅ Tier 1 page fully functional with all features
+- ✅ Lead status updates working on both companies and tier-one pages
 
 ---
 
-## 🚀 Major Performance Issues Resolved (September 7, 2025)
+## 🚀 Major Issues Resolved (September 8, 2025)
 
+### Tier 1 System Implementation
+1. **Complete Tier 1 Overview Page**
+   - **Created**: Dedicated /tier-one route with full company management
+   - **Features**: Stats dashboard, filtering, lead management, export
+   - **Result**: 188 Tier 1 companies fully visible and manageable
+
+2. **Tier 1 Lead Status Update Issues**
+   - **Problem**: CompaniesTable using wrong API endpoint for Tier 1 companies
+   - **Solution**: Created tier-specific API endpoint and proper prop handling
+   - **Result**: Lead status updates work perfectly on tier-one page
+
+3. **Missing Functionality**
+   - **Problem**: Filtering, pagination, export broken on tier-one page
+   - **Solution**: Implemented server-side filtering and pagination in API
+   - **Result**: All functionality working smoothly
+
+4. **API Integration Issues**
+   - **Problem**: UUID vs Integer ID conflicts between tables
+   - **Solution**: Created dedicated /api/tier-one/update-lead-status endpoint
+   - **Result**: Proper handling of tier_one_companies UUID IDs
+
+### Previous Performance Issues (September 7, 2025)
 1. **Clunky Navigation Experience**
    - **Problem**: Page navigation felt slow and unresponsive (1000-2000ms)
    - **Solution**: Implemented React Query with client-side routing and aggressive caching
@@ -130,16 +163,6 @@ fetch('https://api.openai.com/v1/responses', {
    - **Problem**: Marking companies as "has leads" required full page refresh
    - **Solution**: Local state management with instant UI updates and background API sync
    - **Result**: Zero page reloads, buttery smooth button interactions
-
-3. **React 19 Optimistic Update Errors**
-   - **Problem**: `useOptimistic` updates outside transitions causing console errors
-   - **Solution**: Replaced with simple local state approach
-   - **Result**: Clean error-free implementation with better UX
-
-4. **Poor Perceived Performance**
-   - **Problem**: No loading states or progress indicators
-   - **Solution**: Added navigation progress bars, skeleton loaders, and toast notifications
-   - **Result**: Professional feel with clear feedback for all actions
 
 ---
 
@@ -181,15 +204,24 @@ node scripts/reset-failed-companies.js
 - `/lib/services/dataService-new.ts` - Database operations
 - `/lib/services/continuousProcessor.ts` - Advanced processor
 - `/lib/services/gpt5AnalysisService.ts` - GPT-5 integration
-- `/lib/hooks/useCompanies.ts` - **NEW** React Query data fetching hooks
-- `/lib/providers/react-query-provider.tsx` - **UPDATED** Performance-optimized config
+- `/lib/hooks/useCompanies.ts` - React Query data fetching hooks
+- `/lib/providers/react-query-provider.tsx` - Performance-optimized config
 
 ### API Routes
 - `/app/api/dashboard/route.ts` - Dashboard stats
-- `/app/api/dashboard/stats/route.ts` - **NEW** Optimized dashboard stats endpoint
+- `/app/api/dashboard/stats/route.ts` - Optimized dashboard stats endpoint
 - `/app/api/companies/route.ts` - Company list/export
-- `/app/api/companies/[id]/leads/route.ts` - **NEW** Lead status updates
+- `/app/api/companies/update-lead-status/route.ts` - Lead status updates for regular companies
+- `/app/api/tier-one/route.ts` - **NEW** Tier 1 companies with filtering and pagination
+- `/app/api/tier-one/update-lead-status/route.ts` - **NEW** Lead status updates for Tier 1 companies
 - `/app/api/processor/[action]/route.ts` - Processor control
+
+### Pages & Components
+- `/app/tier-one/page.tsx` - **NEW** Tier 1 companies main page
+- `/app/tier-one/tier-one-client.tsx` - **NEW** Tier 1 client component with full functionality
+- `/components/companies/companies-table.tsx` - **UPDATED** Shared table component with tier support
+- `/components/companies/companies-table-wrapper.tsx` - Table wrapper with filtering
+- `/components/navigation/sidebar.tsx` - **UPDATED** Navigation with Tier 1 link
 
 ### Utility Scripts
 - `/scripts/check-companies.js` - Check if companies exist
@@ -206,6 +238,8 @@ node scripts/reset-failed-companies.js
 ✅ Check for existing companies before insert
 ✅ Use simple-processor.js for production
 ✅ Process jobs sequentially
+✅ Use tier-specific API endpoints for tier_one_companies
+✅ Maintain both tier_one_companies and identified_companies tables
 
 ### DON'Ts
 ❌ Never use GPT-4 or other models
@@ -213,6 +247,7 @@ node scripts/reset-failed-companies.js
 ❌ Don't use Chat Completions API (use Responses)
 ❌ Don't rely on unique constraint (add manually)
 ❌ Don't use upsert with onConflict (check first)
+❌ Don't mix UUID and Integer IDs in API calls
 
 ### Known Issues
 1. **Need unique constraint**: Run in Supabase SQL editor:
@@ -234,51 +269,51 @@ node scripts/reset-failed-companies.js
 - **Processing Speed**: ~1 job/second
 - **Skip Rate**: ~30% (already identified)
 - **Error Rate**: <2%
-- **Total Companies**: 721 identified
+- **Total Companies**: 764+ identified (growing)
+- **Tier 1 Coverage**: 34% (64 of 188 companies identified)
 
 ### Cost Analysis
 - **GPT-5 Cost**: ~$0.01 per 100 analyses
 - **Supabase**: Free tier sufficient
-- **Total Monthly**: <$5 at current volume
-
----
-
-## 📝 Next Steps
-
-1. **Add database constraint** for unique company+tool
-2. **Import fresh job data** (all current jobs processed)
-3. **Deploy to production** (Vercel recommended)
-4. **Set up monitoring** for continuous processing
-5. **Add more search terms** for broader coverage
-
----
-
----
-
-## 🚀 NEW Performance Results (September 7, 2025)
-
-### Navigation Performance  
-- **Dashboard → Companies**: ~50ms (was ~1500ms) - **96% improvement**
-- **Companies → Dashboard**: ~50ms (was ~1200ms) - **95% improvement**
-- **Page filtering**: Instant with 300ms debounced search
-- **Lead status updates**: 0ms UI feedback (was full page reload)
-- **Route switching**: No flashing, smooth transitions
-
-### Data Processing
-- **Detection Rate**: 12 companies from 15 analyzed jobs  
-- **Processing Speed**: ~1 job/second
-- **Skip Rate**: ~30% (already identified)
-- **Error Rate**: <2%
-- **Total Companies**: 764 identified (growing)
-
-### Cost Analysis
-- **GPT-5 Cost**: ~$0.01 per 100 analyses
-- **Supabase**: Free tier sufficient  
 - **React Query**: Zero additional cost, massive UX improvement
 - **Total Monthly**: <$5 at current volume
 
 ---
 
-**Last Updated**: September 7, 2025, 16:00 PST  
-**Session Duration**: ~4 hours
-**Key Achievement**: Complete UX transformation - 70% faster navigation, zero page reloads, buttery smooth interactions
+## 📝 Current State Summary
+
+### Navigation Performance  
+- **Dashboard → Companies**: ~50ms (was ~1500ms) - **96% improvement**
+- **Companies → Dashboard**: ~50ms (was ~1200ms) - **95% improvement**
+- **Tier 1 Navigation**: Instant loading with full functionality
+- **Page filtering**: Instant with 300ms debounced search
+- **Lead status updates**: 0ms UI feedback (was full page reload)
+- **Route switching**: No flashing, smooth transitions
+
+### Data Processing
+- **Total Companies**: 764+ identified across all tiers
+- **Tier 1 Companies**: 188 priority targets
+  - 64 identified tools (Outreach/SalesLoft) 
+  - 124 unidentified (need research)
+  - 98 with leads generated
+  - 34% overall coverage
+- **Processing Speed**: ~1 job/second
+- **Skip Rate**: ~30% (already identified)
+- **Error Rate**: <2%
+
+### Feature Completeness
+- ✅ **Dashboard**: Real-time stats and quick access
+- ✅ **Companies Page**: Full company management with filtering
+- ✅ **Tier 1 Page**: Dedicated priority company management
+- ✅ **Lead Management**: Mark companies as has/needs leads
+- ✅ **Export**: CSV export with all company data
+- ✅ **Filtering**: Search, tool, tier, lead status filters
+- ✅ **Pagination**: Efficient data loading
+- ✅ **Real-time Updates**: Instant UI feedback
+- ✅ **Error Handling**: Proper error states and recovery
+
+---
+
+**Last Updated**: September 8, 2025, 12:00 PST  
+**Session Duration**: ~3 hours
+**Key Achievement**: Complete Tier 1 system implementation with full functionality - 188 priority companies now fully manageable with filtering, lead updates, export, and statistics tracking

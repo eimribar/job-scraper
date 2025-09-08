@@ -1,6 +1,5 @@
 import { DataService } from "@/lib/services/dataService";
 import { CompaniesClient } from "./companies-client";
-import { AppHeader } from "@/components/navigation/app-header";
 import { QuickStatsOptimized } from "@/components/dashboard/quick-stats-optimized";
 
 // Enable real-time data updates by disabling Next.js caching
@@ -12,6 +11,7 @@ interface CompaniesPageProps {
     tool?: string;
     search?: string;
     leadStatus?: string;
+    tier?: string;
   };
 }
 
@@ -25,6 +25,7 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
     const tool = params.tool;
     const search = params.search;
     const leadStatus = params.leadStatus as 'all' | 'with_leads' | 'without_leads' | undefined;
+    const tier = params.tier as 'all' | 'Tier 1' | 'Tier 2' | undefined;
     
     const itemsPerPage = 50; // Show more items per page
     const offset = (currentPage - 1) * itemsPerPage;
@@ -41,8 +42,8 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
     
     try {
       [companies, totalCount, dashboardStats] = await Promise.all([
-        dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, search, leadStatus),
-        dataService.getIdentifiedCompaniesCount(tool, undefined, search, leadStatus),
+        dataService.getIdentifiedCompanies(itemsPerPage, offset, tool, undefined, search, leadStatus, tier),
+        dataService.getIdentifiedCompaniesCount(tool, undefined, search, leadStatus, tier),
         dataService.getDashboardStats()
       ]);
     } catch (error) {
@@ -54,12 +55,9 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
-      {/* App Navigation Header */}
-      <AppHeader />
-      
       {/* Page Header */}
       <div className="border-b bg-white/70 backdrop-blur-md">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-6 py-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               Companies Dashboard
@@ -72,7 +70,7 @@ export default async function CompaniesPage({ searchParams }: CompaniesPageProps
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-6 py-4 space-y-4">
+      <div className="container mx-auto px-6 py-6 space-y-4">
         {/* Quick Stats */}
         <section>
           <QuickStatsOptimized />

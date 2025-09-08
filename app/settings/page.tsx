@@ -1,4 +1,3 @@
-import { AppHeader } from "@/components/navigation/app-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -12,12 +11,9 @@ export const dynamic = 'force-dynamic';
 export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
-      {/* App Navigation Header */}
-      <AppHeader />
-      
       {/* Page Header */}
       <div className="border-b bg-white/70 backdrop-blur-md">
-        <div className="container mx-auto px-6 py-4">
+        <div className="container mx-auto px-6 py-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -28,7 +24,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-6">
+      <main className="container mx-auto px-6 py-8">
         <Tabs defaultValue="general" className="space-y-4">
           <TabsList className="grid w-full grid-cols-4 lg:w-[400px]">
             <TabsTrigger value="general">General</TabsTrigger>

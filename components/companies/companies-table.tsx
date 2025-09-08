@@ -54,13 +54,14 @@ interface CompaniesTableProps {
   totalCount: number;
   currentPage: number;
   onPageChange: (page: number) => void;
-  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string }) => void;
+  onFilterChange: (filters: { tool?: string; confidence?: string; search?: string; excludeGoogleSheets?: boolean; leadStatus?: string; tier?: string }) => void;
   onExport: () => void;
   onLeadStatusUpdate?: (companyId: string, leadsGenerated: boolean) => void;
   compact?: boolean;
   isLoading?: boolean;
   searchTerm?: string;
   onSearchChange?: (search: string) => void;
+  hideTierFilter?: boolean;
 }
 
 export function CompaniesTable({
@@ -75,8 +76,10 @@ export function CompaniesTable({
   isLoading = false,
   searchTerm: externalSearchTerm,
   onSearchChange,
+  hideTierFilter = false,
 }: CompaniesTableProps) {
   const [toolFilter, setToolFilter] = useState<string>('all');
+  const [tierFilter, setTierFilter] = useState<string>('all');
   const [internalSearchTerm, setInternalSearchTerm] = useState(externalSearchTerm || '');
   const [debouncedSearchTerm] = useDebounce(internalSearchTerm, 300);
   
@@ -118,6 +121,7 @@ export function CompaniesTable({
       search: debouncedSearchTerm || undefined,
       excludeGoogleSheets: filterToUse === 'new',
       leadStatus: leadFilter === 'all' ? undefined : leadFilter,
+      tier: tierFilter === 'all' ? undefined : tierFilter
     });
   };
   
@@ -134,13 +138,14 @@ export function CompaniesTable({
 
   const clearAllFilters = () => {
     setToolFilter('all');
+    setTierFilter('all');
     setInternalSearchTerm('');
     setSourceFilter('all');
     setLeadFilter('all');
     onFilterChange({});
   };
 
-  const hasActiveFilters = toolFilter !== 'all' || debouncedSearchTerm || sourceFilter !== 'all' || leadFilter !== 'all';
+  const hasActiveFilters = toolFilter !== 'all' || debouncedSearchTerm || sourceFilter !== 'all' || leadFilter !== 'all' || tierFilter !== 'all';
 
   const getToolBadge = (tool: string) => {
     return <ToolIcon tool={tool} showText={false} />;
@@ -237,9 +242,13 @@ export function CompaniesTable({
     );
     
     // Optimistic updates for all selected companies
-    Array.from(selectedCompanies).forEach(companyId => {
-      updateOptimisticCompanies({ id: companyId, leadsGenerated });
-    });
+    setLocalCompanies(prev => 
+      prev.map(company => 
+        selectedCompanies.has(company.id)
+          ? { ...company, leads_generated: leadsGenerated }
+          : company
+      )
+    );
     
     try {
       const response = await fetch('/api/companies/update-lead-status', {
@@ -261,9 +270,13 @@ export function CompaniesTable({
     } catch (error) {
       console.error('Error bulk updating lead status:', error);
       // Revert all optimistic updates
-      Array.from(selectedCompanies).forEach(companyId => {
-        updateOptimisticCompanies({ id: companyId, leadsGenerated: !leadsGenerated });
-      });
+      setLocalCompanies(prev => 
+        prev.map(company => 
+          selectedCompanies.has(company.id)
+            ? { ...company, leads_generated: !leadsGenerated }
+            : company
+        )
+      );
       showToast.error('Failed to update companies. Please try again.');
     } finally {
       setIsBulkUpdating(false);
@@ -365,6 +378,42 @@ export function CompaniesTable({
               </SelectItem>
             </SelectContent>
           </Select>
+
+          {!hideTierFilter && (
+            <Select value={tierFilter} onValueChange={(value) => {
+              setTierFilter(value);
+              onFilterChange({
+                tool: toolFilter === 'all' ? undefined : toolFilter,
+                search: debouncedSearchTerm || undefined,
+                excludeGoogleSheets: sourceFilter === 'new',
+                leadStatus: leadFilter === 'all' ? undefined : leadFilter,
+                tier: value === 'all' ? undefined : value,
+              });
+            }}>
+              <SelectTrigger className="w-[160px] bg-white border-slate-200 hover:bg-slate-50">
+                <div className="flex items-center gap-2">
+                  {tierFilter === 'Tier 1' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                  {tierFilter === 'Tier 2' && <div className="w-2 h-2 rounded-full bg-gray-400" />}
+                  <SelectValue placeholder="Tier" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="bg-white border-slate-200">
+                <SelectItem value="all">All Tiers</SelectItem>
+                <SelectItem value="Tier 1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    <span>Tier 1</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="Tier 2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    <span>Tier 2</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
         </div>
         
@@ -481,6 +530,18 @@ export function CompaniesTable({
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             {company.company || company.company_name}
+                            {company.tier && (
+                              <Badge 
+                                variant={company.tier === 'Tier 1' ? 'default' : 'secondary'} 
+                                className={`text-xs px-2 py-1 ${
+                                  company.tier === 'Tier 1' 
+                                    ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                                    : 'bg-gray-100 text-gray-700 border-gray-200'
+                                }`}
+                              >
+                                {company.tier}
+                              </Badge>
+                            )}
                             {company.context && (
                               <Button
                                 variant="ghost"
@@ -506,7 +567,7 @@ export function CompaniesTable({
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 transition-all hover:scale-110"
-                          onClick={() => handleLeadStatusUpdate(company.id, !company.leads_generated)}
+                          onClick={() => (onLeadStatusUpdate || handleLeadStatusUpdate)(company.id, !company.leads_generated)}
                           disabled={updatingCompanies.has(company.id)}
                           title={company.leads_generated ? "Mark as needs leads" : "Mark as has leads"}
                         >

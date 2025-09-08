@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ReactQueryProvider } from "@/lib/providers/react-query-provider";
 import { ToastContainer } from "@/components/ui/toast";
 import { MinimalNavigationProgress } from "@/components/ui/navigation-progress";
+import { Sidebar } from "@/components/navigation/sidebar";
 import "./globals.css";
 
 const inter = Inter({ 
@@ -38,7 +39,11 @@ export default function RootLayout({
         <MinimalNavigationProgress />
         <ReactQueryProvider>
           <div className="relative min-h-screen">
-            {children}
+            <Sidebar />
+            {/* Main content area adjusted for sidebar */}
+            <div className="ml-16 min-h-screen">
+              {children}
+            </div>
             <ToastContainer />
           </div>
         </ReactQueryProvider>

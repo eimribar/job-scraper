@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const source = searchParams.get('source') || undefined; // 'google_sheets', 'job_analysis', or undefined for all
     const excludeGoogleSheets = searchParams.get('excludeGoogleSheets') === 'true';
     const leadStatus = searchParams.get('leadStatus') as 'all' | 'with_leads' | 'without_leads' | undefined;
+    const tier = searchParams.get('tier') as 'all' | 'Tier 1' | 'Tier 2' | undefined;
     
     const offset = (page - 1) * limit;
 
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest) {
       tool, 
       confidence,
       search,
-      leadStatus
+      leadStatus,
+      tier
     );
     
     // Search is now handled by the database query, no need for client-side filtering
@@ -37,7 +39,8 @@ export async function GET(request: NextRequest) {
       tool, 
       confidence,
       search,
-      leadStatus
+      leadStatus,
+      tier
     );
 
     return NextResponse.json({

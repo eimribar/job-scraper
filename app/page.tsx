@@ -4,7 +4,6 @@ import { QuickStatsOptimized } from "@/components/dashboard/quick-stats-optimize
 import { LeadCoverageWidget } from "@/components/dashboard/lead-coverage-widget";
 import { CompaniesTableWrapper } from "@/components/companies/companies-table-wrapper";
 import { DataService } from "@/lib/services/dataService";
-import { AppHeader } from "@/components/navigation/app-header";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -26,11 +25,22 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/20">
-      {/* App Navigation Header */}
-      <AppHeader />
+      {/* Page Header */}
+      <div className="border-b bg-white/70 backdrop-blur-md">
+        <div className="container mx-auto px-6 py-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Dashboard
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Overview of companies using sales engagement platforms
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-3">
+      <main className="container mx-auto px-6 py-6">
         <div className="space-y-3">
           {/* Quick Stats - Now optimized with React Query */}
           <section>

@@ -182,7 +182,8 @@ export class DataService {
     tool?: string,
     confidence?: string,
     search?: string,
-    leadStatus?: 'all' | 'with_leads' | 'without_leads'
+    leadStatus?: 'all' | 'with_leads' | 'without_leads',
+    tier?: 'all' | 'Tier 1' | 'Tier 2'
   ): Promise<any[]> {
     if (!this.isConfigured || !this.supabase) {
       console.warn('DataService not configured - returning empty companies list');
@@ -217,6 +218,11 @@ export class DataService {
       query = query.or('leads_generated.is.null,leads_generated.eq.false');
     }
 
+    // Add tier filter
+    if (tier && tier !== 'all') {
+      query = query.eq('tier', tier);
+    }
+
     const { data, error } = await query;
 
     if (error) {
@@ -244,7 +250,7 @@ export class DataService {
     })) || [];
   }
 
-  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string, leadStatus?: 'all' | 'with_leads' | 'without_leads'): Promise<number> {
+  async getIdentifiedCompaniesCount(tool?: string, confidence?: string, search?: string, leadStatus?: 'all' | 'with_leads' | 'without_leads', tier?: 'all' | 'Tier 1' | 'Tier 2'): Promise<number> {
     if (!this.isConfigured || !this.supabase) {
       console.warn('DataService not configured - returning 0 count');
       return 0;
@@ -271,6 +277,11 @@ export class DataService {
       query = query.eq('leads_generated', true);
     } else if (leadStatus === 'without_leads') {
       query = query.or('leads_generated.is.null,leads_generated.eq.false');
+    }
+
+    // Add tier filter for count
+    if (tier && tier !== 'all') {
+      query = query.eq('tier', tier);
     }
 
     const { count, error } = await query;
@@ -585,5 +596,177 @@ export class DataService {
     ];
 
     return csvRows.join('\\n');
+  }
+
+  // ================================================
+  // TIER MANAGEMENT METHODS
+  // ================================================
+
+  /**
+   * Get all Tier 1 companies from tier_one_companies table
+   */
+  async getTierOneCompanies(): Promise<any[]> {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty tier one companies list');
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('tier_one_companies')
+      .select('*')
+      .order('company_name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching tier one companies:', error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get comprehensive tier overview using the view
+   */
+  async getTierOverview(): Promise<any[]> {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty tier overview');
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('company_tier_overview')
+      .select('*')
+      .order('company_name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching tier overview:', error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get tier statistics for dashboard
+   */
+  async getTierStats(): Promise<{
+    tier1Total: number;
+    tier1Identified: number;
+    tier1NotIdentified: number;
+    tier2Total: number;
+    totalCompanies: number;
+  }> {
+    if (!this.isConfigured || !this.supabase) {
+      console.warn('DataService not configured - returning empty tier stats');
+      return {
+        tier1Total: 0,
+        tier1Identified: 0,
+        tier1NotIdentified: 0,
+        tier2Total: 0,
+        totalCompanies: 0
+      };
+    }
+
+    try {
+      // Get total Tier 1 companies
+      const { count: tier1Total, error: tier1Error } = await this.supabase
+        .from('tier_one_companies')
+        .select('id', { count: 'exact', head: true });
+
+      if (tier1Error) {
+        console.error('Error getting Tier 1 count:', tier1Error);
+      }
+
+      // Get identified Tier 1 companies
+      const { count: tier1Identified, error: tier1IdentifiedError } = await this.supabase
+        .from('identified_companies')
+        .select('id', { count: 'exact', head: true })
+        .eq('tier', 'Tier 1')
+        .neq('tool_detected', 'Not Identified Yet');
+
+      if (tier1IdentifiedError) {
+        console.error('Error getting identified Tier 1 count:', tier1IdentifiedError);
+      }
+
+      // Get Tier 2 companies
+      const { count: tier2Total, error: tier2Error } = await this.supabase
+        .from('identified_companies')
+        .select('id', { count: 'exact', head: true })
+        .eq('tier', 'Tier 2');
+
+      if (tier2Error) {
+        console.error('Error getting Tier 2 count:', tier2Error);
+      }
+
+      // Get total companies
+      const { count: totalCompanies, error: totalError } = await this.supabase
+        .from('identified_companies')
+        .select('id', { count: 'exact', head: true });
+
+      if (totalError) {
+        console.error('Error getting total companies count:', totalError);
+      }
+
+      const tier1TotalCount = tier1Total || 0;
+      const tier1IdentifiedCount = tier1Identified || 0;
+
+      return {
+        tier1Total: tier1TotalCount,
+        tier1Identified: tier1IdentifiedCount,
+        tier1NotIdentified: tier1TotalCount - tier1IdentifiedCount,
+        tier2Total: tier2Total || 0,
+        totalCompanies: totalCompanies || 0
+      };
+    } catch (error) {
+      console.error('Error getting tier stats:', error);
+      return {
+        tier1Total: 0,
+        tier1Identified: 0,
+        tier1NotIdentified: 0,
+        tier2Total: 0,
+        totalCompanies: 0
+      };
+    }
+  }
+
+  /**
+   * Update company tier manually
+   */
+  async updateCompanyTier(companyId: string, tier: 'Tier 1' | 'Tier 2'): Promise<void> {
+    if (!this.isConfigured || !this.supabase) {
+      throw new Error('DataService not configured');
+    }
+
+    const { error } = await this.supabase
+      .from('identified_companies')
+      .update({ tier })
+      .eq('id', companyId);
+
+    if (error) {
+      console.error('Error updating company tier:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a company is Tier 1 (used during company identification)
+   */
+  async isCompanyTierOne(companyName: string): Promise<boolean> {
+    if (!this.isConfigured || !this.supabase) {
+      return false;
+    }
+
+    const { data, error } = await this.supabase
+      .from('tier_one_companies')
+      .select('id')
+      .ilike('company_name', `%${companyName.trim()}%`)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking if company is Tier 1:', error);
+      return false;
+    }
+
+    return (data && data.length > 0) || false;
   }
 }
