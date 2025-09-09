@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, CheckCircle, AlertCircle, Play, RotateCw, Calendar } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
+import toast from 'react-hot-toast';
 
 interface SearchTerm {
   id: string;
@@ -22,6 +23,7 @@ export function SearchTermsGrid() {
   const [searchTerms, setSearchTerms] = useState<SearchTerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingTerm, setProcessingTerm] = useState<string | null>(null);
+  const [processingAll, setProcessingAll] = useState(false);
 
   useEffect(() => {
     fetchSearchTerms();
@@ -81,17 +83,80 @@ export function SearchTermsGrid() {
   const handleProcessTerm = async (termId: string, searchTerm: string) => {
     setProcessingTerm(termId);
     
-    const response = await fetch('/api/automation/process-term', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ searchTerm })
-    });
+    try {
+      const response = await fetch('/api/automation/process-term', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchTerm })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        toast.success(`Processed ${searchTerm}: ${data.jobsScraped} jobs found`);
+        await fetchSearchTerms();
+      } else {
+        toast.error(data.error || `Failed to process ${searchTerm}`);
+      }
+    } catch (error) {
+      toast.error(`Error processing ${searchTerm}`);
+      console.error('Process term error:', error);
+    } finally {
+      setProcessingTerm(null);
+    }
+  };
+
+  const handleProcessAllPending = async () => {
+    const pendingTerms = searchTerms.filter(t => t.needsScraping);
     
-    if (response.ok) {
-      await fetchSearchTerms();
+    if (pendingTerms.length === 0) {
+      toast.info('No pending terms to process');
+      return;
+    }
+    
+    setProcessingAll(true);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    toast.loading(`Processing ${pendingTerms.length} pending terms...`);
+    
+    for (const term of pendingTerms) {
+      try {
+        setProcessingTerm(term.id);
+        
+        const response = await fetch('/api/automation/process-term', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ searchTerm: term.search_term })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          successCount++;
+          console.log(`✅ Processed ${term.search_term}`);
+        } else {
+          errorCount++;
+          console.error(`❌ Failed ${term.search_term}:`, data.error);
+        }
+      } catch (error) {
+        errorCount++;
+        console.error(`❌ Error processing ${term.search_term}:`, error);
+      }
     }
     
     setProcessingTerm(null);
+    setProcessingAll(false);
+    toast.dismiss();
+    
+    if (successCount > 0) {
+      toast.success(`Successfully processed ${successCount} terms`);
+      await fetchSearchTerms();
+    }
+    
+    if (errorCount > 0) {
+      toast.error(`Failed to process ${errorCount} terms`);
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -207,8 +272,14 @@ export function SearchTermsGrid() {
         <div className="mt-4 pt-4 border-t">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Auto-scraping enabled for terms older than 7 days</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs">
-              Process All Pending
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="h-7 text-xs"
+              onClick={handleProcessAllPending}
+              disabled={processingAll || processingTerm !== null}
+            >
+              {processingAll ? 'Processing...' : 'Process All Pending'}
             </Button>
           </div>
         </div>

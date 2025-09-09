@@ -275,6 +275,41 @@ export class WeeklyScraperService {
     }
   }
 
+  async processSingleTerm(searchTerm: string): Promise<any> {
+    console.log(`🎯 MANUAL PROCESSING: "${searchTerm}"`);
+    console.log('='.repeat(60));
+    
+    try {
+      // Process the specific search term
+      const result = await this.scrapeSearchTerm(searchTerm);
+      
+      if (result.success) {
+        console.log('\n✅ MANUAL SCRAPING COMPLETE');
+        console.log(`   Term processed: "${searchTerm}"`);
+        console.log(`   Jobs scraped: ${result.totalScraped}`);
+        console.log(`   New jobs added: ${result.newJobsAdded}`);
+        
+        return {
+          success: true,
+          termProcessed: searchTerm,
+          jobsScraped: result.totalScraped,
+          newJobsAdded: result.newJobsAdded,
+          companiesFound: 0  // We'll calculate this if needed
+        };
+      } else {
+        throw new Error(result.error || 'Scraping failed');
+      }
+      
+    } catch (error: any) {
+      console.error(`❌ Failed to process term "${searchTerm}":`, error.message);
+      return {
+        success: false,
+        termProcessed: searchTerm,
+        error: error.message
+      };
+    }
+  }
+
   async processOneSearchTerm(): Promise<any> {
     console.log('🎯 PROCESSING ONE SEARCH TERM (Hourly Cron)');
     console.log('='.repeat(60));
