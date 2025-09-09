@@ -1,15 +1,31 @@
 import { NextResponse } from 'next/server';
 import { createApiSupabaseClient } from '@/lib/supabase';
 
-// This endpoint runs every 30 minutes to monitor system health
-export async function POST(request: Request) {
-  try {
-    // Security: Check if request is from Vercel Cron
-    const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+// Helper function to check if request is from Vercel Cron
+function isVercelCron(request: Request): boolean {
+  const userAgent = request.headers.get('user-agent');
+  return userAgent === 'vercel-cron/1.0';
+}
 
+// Helper function to check authorization
+function isAuthorized(request: Request): boolean {
+  // Allow Vercel cron requests
+  if (isVercelCron(request)) {
+    return true;
+  }
+  
+  // Check for CRON_SECRET in authorization header
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Main health check logic
+async function runHealthCheck() {
+  try {
     console.log('🏥 Health check cron triggered at', new Date().toISOString());
 
     const supabase = createApiSupabaseClient();
@@ -148,12 +164,17 @@ export async function POST(request: Request) {
   }
 }
 
-// GET for manual health check
-export async function GET() {
-  // Reuse the POST logic for manual checks
-  return POST(new Request('http://localhost', {
-    headers: {
-      authorization: `Bearer ${process.env.CRON_SECRET || ''}`
-    }
-  }));
+// POST endpoint for manual triggers
+export async function POST(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return runHealthCheck();
+}
+
+// GET endpoint for Vercel cron and manual checks
+export async function GET(request: Request) {
+  // Always run health check for both Vercel cron and manual requests
+  return runHealthCheck();
 }

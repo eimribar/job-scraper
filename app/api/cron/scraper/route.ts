@@ -1,17 +1,33 @@
 import { NextResponse } from 'next/server';
 import { WeeklyScraperService } from '@/lib/services/weeklyScraperService';
 
-// This endpoint runs every hour to scrape one search term
-export async function POST(request: Request) {
+// Helper function to check if request is from Vercel Cron
+function isVercelCron(request: Request): boolean {
+  const userAgent = request.headers.get('user-agent');
+  return userAgent === 'vercel-cron/1.0';
+}
+
+// Helper function to check authorization
+function isAuthorized(request: Request): boolean {
+  // Allow Vercel cron requests
+  if (isVercelCron(request)) {
+    return true;
+  }
+  
+  // Check for CRON_SECRET in authorization header
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Main scraper logic
+async function runScraper() {
   const startTime = Date.now();
   
   try {
-    // Security: Check if request is from Vercel Cron
-    const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     console.log('🕐 Hourly scraper triggered at', new Date().toISOString());
 
     const scraper = new WeeklyScraperService();
@@ -80,8 +96,24 @@ export async function POST(request: Request) {
   }
 }
 
-// GET for manual testing and monitoring
-export async function GET() {
+// POST endpoint for manual triggers
+export async function POST(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return runScraper();
+}
+
+// GET endpoint for Vercel cron and status checks
+export async function GET(request: Request) {
+  // If this is a Vercel cron request, run the scraper
+  if (isVercelCron(request)) {
+    console.log('📢 Vercel cron detected, running scraper...');
+    return runScraper();
+  }
+  
+  // Otherwise return status
   try {
     const scraper = new WeeklyScraperService();
     

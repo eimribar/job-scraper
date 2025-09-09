@@ -1,17 +1,33 @@
 import { NextResponse } from 'next/server';
 import { ContinuousAnalyzerService } from '@/lib/services/continuousAnalyzerService';
 
-// This endpoint runs every 5 minutes to analyze unprocessed jobs
-export async function POST(request: Request) {
+// Helper function to check if request is from Vercel Cron
+function isVercelCron(request: Request): boolean {
+  const userAgent = request.headers.get('user-agent');
+  return userAgent === 'vercel-cron/1.0';
+}
+
+// Helper function to check authorization
+function isAuthorized(request: Request): boolean {
+  // Allow Vercel cron requests
+  if (isVercelCron(request)) {
+    return true;
+  }
+  
+  // Check for CRON_SECRET in authorization header
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Main analyzer logic
+async function runAnalyzer() {
   const startTime = Date.now();
   
   try {
-    // Security: Check if request is from Vercel Cron
-    const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     console.log('🤖 Analyzer cron triggered at', new Date().toISOString());
 
     const analyzer = new ContinuousAnalyzerService();
@@ -80,8 +96,24 @@ export async function POST(request: Request) {
   }
 }
 
-// GET for manual testing and monitoring
-export async function GET() {
+// POST endpoint for manual triggers
+export async function POST(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return runAnalyzer();
+}
+
+// GET endpoint for Vercel cron and status checks
+export async function GET(request: Request) {
+  // If this is a Vercel cron request, run the analyzer
+  if (isVercelCron(request)) {
+    console.log('📢 Vercel cron detected, running analyzer...');
+    return runAnalyzer();
+  }
+  
+  // Otherwise return status
   try {
     const analyzer = new ContinuousAnalyzerService();
     const supabase = (analyzer as any).supabase;
