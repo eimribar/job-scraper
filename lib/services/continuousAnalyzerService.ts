@@ -85,7 +85,7 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
         // Fallback: Fetch from database
         const { data, error } = await this.supabase
           .from('identified_companies')
-          .select('company_name');
+          .select('company');
         
         if (error) {
           console.error('❌ Error fetching identified companies:', error);
@@ -97,8 +97,8 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
         
         if (data && data.length > 0) {
           data.forEach(row => {
-            if (row.company_name) {
-              const normalized = row.company_name.toLowerCase().trim();
+            if (row.company) {
+              const normalized = row.company.toLowerCase().trim();
               this.identifiedCompaniesCache.add(normalized);
             }
           });
@@ -297,7 +297,7 @@ Job Description: ${job.description}`;
               const { error: companyError } = await this.supabase
                 .from('identified_companies')
                 .upsert({
-                  company_name: job.company,
+                  company: job.company,
                   tool_detected: analysis.tool_detected,
                   signal_type: analysis.signal_type || 'explicit_mention',
                   context: analysis.context || '',
@@ -310,7 +310,7 @@ Job Description: ${job.description}`;
                   source: 'job_analysis',  // Mark as discovered from job analysis
                   import_date: new Date().toISOString()  // Track when it was imported
                 }, { 
-                  onConflict: 'company_name,tool_detected',
+                  onConflict: 'company,tool_detected',
                   ignoreDuplicates: false 
                 });
               
