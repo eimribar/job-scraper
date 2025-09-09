@@ -301,14 +301,11 @@ Job Description: ${job.description}`;
                   tool_detected: analysis.tool_detected,
                   signal_type: analysis.signal_type || 'explicit_mention',
                   context: analysis.context || '',
-                  confidence: analysis.confidence || 'medium',
                   job_title: job.job_title,
                   job_url: job.job_url,
                   linkedin_url: '',
                   platform: job.platform,
-                  identified_date: new Date().toISOString(),
-                  source: 'job_analysis',  // Mark as discovered from job analysis
-                  import_date: new Date().toISOString()  // Track when it was imported
+                  identified_date: new Date().toISOString()
                 }, { 
                   onConflict: 'company,tool_detected',
                   ignoreDuplicates: false 
