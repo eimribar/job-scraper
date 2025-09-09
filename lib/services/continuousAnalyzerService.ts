@@ -22,6 +22,25 @@ export class ContinuousAnalyzerService {
     });
   }
 
+  private async createNotification(
+    type: 'analysis_complete' | 'company_discovered' | 'error',
+    title: string,
+    message: string,
+    metadata?: any
+  ) {
+    try {
+      await this.supabase.from('notifications').insert({
+        notification_type: type,
+        title,
+        message,
+        metadata,
+        created_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
+  }
+
   private systemPrompt = `You are an expert at analyzing job descriptions to identify if companies use Outreach.io or SalesLoft.
 
 IMPORTANT: Distinguish between "Outreach" (the tool) and "outreach" (general sales activity).
@@ -293,6 +312,18 @@ Job Description: ${job.description}`;
               console.log(`  🎯 DETECTED: ${analysis.tool_detected} (${analysis.confidence} confidence)`);
               toolsFound++;
               
+              // Create notification for company discovery
+              await this.createNotification(
+                'company_discovered',
+                `New company found: ${job.company}`,
+                `${job.company} uses ${analysis.tool_detected} (found in "${job.job_title}")`,
+                {
+                  company: job.company,
+                  tool: analysis.tool_detected,
+                  jobTitle: job.job_title
+                }
+              );
+              
               // Save to identified_companies with source tracking
               const { error: companyError } = await this.supabase
                 .from('identified_companies')
@@ -368,6 +399,20 @@ Job Description: ${job.description}`;
       console.log(`   Skipped (already identified): ${skipped}`);
       console.log(`   Tools detected: ${toolsFound}`);
       console.log(`   Errors: ${errors}`);
+      
+      // Create notification for batch completion
+      if (processed > 0) {
+        await this.createNotification(
+          'analysis_complete',
+          `Analyzed ${processed} jobs`,
+          `Completed batch: ${toolsFound} companies found using sales tools`,
+          {
+            jobsCount: processed,
+            companiesFound: toolsFound,
+            skipped: skipped
+          }
+        );
+      }
       
       // Check remaining unprocessed jobs
       const { count: remaining } = await this.supabase

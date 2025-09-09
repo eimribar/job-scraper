@@ -19,6 +19,25 @@ export class WeeklyScraperService {
     });
   }
 
+  private async createNotification(
+    type: 'scraping_started' | 'scraping_completed' | 'error',
+    title: string,
+    message: string,
+    metadata?: any
+  ) {
+    try {
+      await this.supabase.from('notifications').insert({
+        notification_type: type,
+        title,
+        message,
+        metadata,
+        created_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
+  }
+
   async checkIfTimeForWeeklyScrape(): Promise<boolean> {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -279,6 +298,14 @@ export class WeeklyScraperService {
     console.log(`🎯 MANUAL PROCESSING: "${searchTerm}"`);
     console.log('='.repeat(60));
     
+    // Create notification for scraping start
+    await this.createNotification(
+      'scraping_started',
+      `Started scraping: ${searchTerm}`,
+      `Manual trigger initiated for "${searchTerm}"`,
+      { searchTerm }
+    );
+    
     try {
       // Process the specific search term
       const result = await this.scrapeSearchTerm(searchTerm);
@@ -288,6 +315,18 @@ export class WeeklyScraperService {
         console.log(`   Term processed: "${searchTerm}"`);
         console.log(`   Jobs scraped: ${result.totalScraped}`);
         console.log(`   New jobs added: ${result.newJobsAdded}`);
+        
+        // Create notification for completion
+        await this.createNotification(
+          'scraping_completed',
+          `Completed: ${searchTerm}`,
+          `Scraped ${result.totalScraped} jobs, added ${result.newJobsAdded} new`,
+          { 
+            searchTerm,
+            jobsCount: result.totalScraped,
+            newJobsCount: result.newJobsAdded
+          }
+        );
         
         return {
           success: true,
@@ -349,6 +388,14 @@ export class WeeklyScraperService {
     console.log(`   Last scraped: ${daysSinceLastScrape === 'Never' ? 'Never' : `${daysSinceLastScrape} days ago`}`);
     console.log('');
     
+    // Create notification for automated scraping start
+    await this.createNotification(
+      'scraping_started',
+      `Started scraping: ${termToProcess.search_term}`,
+      `Automatic weekly scraping initiated for "${termToProcess.search_term}"`,
+      { searchTerm: termToProcess.search_term }
+    );
+    
     // Process this single search term
     try {
       const result = await this.scrapeSearchTerm(termToProcess.search_term);
@@ -359,6 +406,18 @@ export class WeeklyScraperService {
         console.log(`   Jobs scraped: ${result.totalScraped}`);
         console.log(`   New jobs added: ${result.newJobs}`);
         console.log(`   Duplicates found: ${result.duplicates}`);
+        
+        // Create notification for completion
+        await this.createNotification(
+          'scraping_completed',
+          `Completed: ${termToProcess.search_term}`,
+          `Scraped ${result.totalScraped} jobs (${result.newJobs} new). Ready for analysis`,
+          { 
+            searchTerm: termToProcess.search_term,
+            jobsCount: result.totalScraped,
+            newJobsCount: result.newJobs
+          }
+        );
         
         // Check how many terms still need processing
         const { count: remainingTerms } = await this.supabase
