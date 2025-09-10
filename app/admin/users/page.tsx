@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { CleanUserManagement } from './clean-user-management';
+import { PerfectAdmin } from './perfect-admin';
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -83,7 +83,7 @@ export default async function AdminUsersPage() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-6">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border shadow-lg">
-          <CleanUserManagement users={displayUsers} currentUserId={user.id} />
+          <PerfectAdmin users={displayUsers} currentUserId={user.id} />
         </div>
       </main>
     </div>
