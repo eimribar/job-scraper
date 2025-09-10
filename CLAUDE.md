@@ -3,10 +3,19 @@
 ## Purpose
 This file contains critical context for AI assistants (Claude, ChatGPT, etc.) to continue development seamlessly.
 
-## Last Session: September 8, 2025 (Part 2)
+## Last Session: September 10, 2025 - CRITICAL FIXES APPLIED
 
 ### Session Summary
-**PRODUCTION AUTOMATION COMPLETED** - Built rock-solid 24/7 automation system on Vercel. Fixed all database issues, configured cron jobs, and verified end-to-end pipeline. System now autonomously scrapes LinkedIn (825+ jobs/hour), analyzes with GPT-5 (28,800 jobs/day capacity), and identifies companies using Outreach.io/SalesLoft with 0% error rate.
+**CRITICAL FIXES APPLIED** - Comprehensive QA audit revealed and fixed multiple critical issues:
+1. ✅ Standardized GPT model to `gpt-5-mini-2025-08-07` everywhere
+2. ✅ Fixed broken hardcoded paths using relative paths
+3. ✅ Removed non-existent confidence field references
+4. ✅ Fixed notification table field naming (type vs notification_type)
+5. ✅ Added robust error handling to prevent false processing
+6. ✅ Updated environment example with all required variables
+7. ✅ Created comprehensive troubleshooting guide
+
+**Previous Achievement:** Built rock-solid 24/7 automation system on Vercel. System autonomously scrapes LinkedIn (825+ jobs/hour), analyzes with GPT-5-mini-2025-08-07 (28,800 jobs/day capacity), and identifies companies using Outreach.io/SalesLoft.
 
 ---
 
@@ -17,11 +26,11 @@ This file contains critical context for AI assistants (Claude, ChatGPT, etc.) to
 **How**: Analyze LinkedIn job descriptions with GPT-5 → Store in Supabase → Display in dashboard with tier classification
 
 ### Key Requirements (CRITICAL - DO NOT CHANGE)
-1. **GPT-5-mini ONLY** - Never use GPT-4 or other models
+1. **GPT-5-mini-2025-08-07 ONLY** - EXACT model name, never use GPT-4 or other models
 2. **Sequential Processing** - One job at a time to manage API rate limits
-3. **No confidence field** - Database schema doesn't include confidence column
-4. **Duplicate Prevention** - Check existence before insert (no unique constraint yet)
-5. **Simple Processor** - Use scripts/simple-processor.js for production
+3. **No confidence field** - Database schema doesn't include confidence column (FIXED)
+4. **Duplicate Prevention** - Check existence before insert
+5. **Error Validation** - Jobs only marked processed after successful GPT analysis
 6. **Tier Classification** - Maintain both tier_one_companies and identified_companies tables
 
 ---

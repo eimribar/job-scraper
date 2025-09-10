@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createApiSupabaseClient } from '@/lib/supabase';
+import { unifiedProcessor } from '@/lib/services/unifiedProcessorService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,19 +53,41 @@ export async function GET(request: NextRequest) {
     const { count: totalJobs } = await supabase
       .from('raw_jobs')
       .select('*', { count: 'exact', head: true });
+    
+    // Get processor status (consolidating monitor endpoints)
+    const processorStatus = unifiedProcessor.getStatus();
+    
+    // Get today's metrics (consolidating dashboard endpoints)
+    const today = new Date().toISOString().split('T')[0];
+    const { count: jobsToday } = await supabase
+      .from('raw_jobs')
+      .select('*', { count: 'exact', head: true })
+      .eq('processed', true)
+      .gte('analyzed_date', `${today}T00:00:00`);
+    
+    const { count: companiesToday } = await supabase
+      .from('identified_companies')
+      .select('*', { count: 'exact', head: true })
+      .gte('identified_date', `${today}T00:00:00`);
 
-    // Basic health response
+    // Enhanced health response (consolidating monitor/metrics/debug endpoints)
     const health = {
       status: 'healthy' as 'healthy' | 'degraded' | 'unhealthy',
       timestamp: now.toISOString(),
+      model: 'gpt-5-mini-2025-08-07',
       database: {
         connected: true,
         responsive: true
       },
       processing: {
+        ...processorStatus,
         recentJobsProcessed: recentJobs || 0,
         unprocessedJobsBacklog: unprocessedJobs || 0,
-        isProcessingActive: (recentJobs || 0) > 0
+        isProcessingActive: processorStatus.isRunning || (recentJobs || 0) > 0,
+        jobsToday: jobsToday || 0,
+        detectionRate: jobsToday && jobsToday > 0 
+          ? `${((companiesToday || 0) / jobsToday * 100).toFixed(2)}%`
+          : '0%'
       },
       scraping: {
         overdueSearchTerms: overdueTerms || 0,
@@ -72,8 +95,16 @@ export async function GET(request: NextRequest) {
       },
       totals: {
         companiesDetected: totalCompanies || 0,
-        jobsScraped: totalJobs || 0
+        companiesDetectedToday: companiesToday || 0,
+        jobsScraped: totalJobs || 0,
+        jobsProcessedToday: jobsToday || 0
       },
+      system: detailed ? {
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        nodeVersion: process.version,
+        environment: process.env.NODE_ENV || 'development'
+      } : undefined,
       alerts: [] as Array<{level: string, message: string, action: string}>
     };
 

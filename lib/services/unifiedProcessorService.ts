@@ -1,18 +1,28 @@
+/**
+ * Unified Processor Service
+ * 
+ * This is the SINGLE source of truth for job processing.
+ * Combines the best features from all previous processors.
+ * 
+ * Created: 2025-09-10
+ * Model: gpt-5-mini-2025-08-07 (NEVER CHANGE)
+ */
+
 import { createApiSupabaseClient } from '../supabase';
 import OpenAI from 'openai';
 
-export class ContinuousAnalyzerService {
+export class UnifiedProcessorService {
   private supabase;
   private openai;
   private identifiedCompaniesCache: Set<string> = new Set();
   private lastCacheUpdate: number = 0;
   private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private isRunning = false;
   private stats = {
     totalAnalyzed: 0,
     toolsDetected: 0,
     errors: 0,
-    skippedAlreadyIdentified: 0,
-    isRunning: false
+    skippedAlreadyIdentified: 0
   };
 
   constructor() {
@@ -22,25 +32,9 @@ export class ContinuousAnalyzerService {
     });
   }
 
-  private async createNotification(
-    type: 'analysis_complete' | 'company_discovered' | 'error',
-    title: string,
-    message: string,
-    metadata?: any
-  ) {
-    try {
-      await this.supabase.from('notifications').insert({
-        type,  // Fixed: use 'type' not 'notification_type' as per schema
-        title,
-        message,
-        metadata,
-        created_at: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Failed to create notification:', error);
-    }
-  }
-
+  /**
+   * System prompt for GPT-5-mini-2025-08-07
+   */
   private systemPrompt = `You are an expert at analyzing job descriptions to identify if companies use Outreach.io or SalesLoft.
 
 IMPORTANT: Distinguish between "Outreach" (the tool) and "outreach" (general sales activity).
@@ -73,10 +67,35 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
   "context": "exact quote mentioning the tool"
 }`;
 
+  /**
+   * Create notification in database
+   */
+  private async createNotification(
+    type: 'analysis_complete' | 'company_discovered' | 'error',
+    title: string,
+    message: string,
+    metadata?: any
+  ): Promise<void> {
+    try {
+      await this.supabase.from('notifications').insert({
+        type,
+        title,
+        message,
+        metadata,
+        created_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to create notification:', error);
+    }
+  }
+
+  /**
+   * Refresh the cache of already identified companies
+   */
   async refreshCompaniesCache(): Promise<void> {
     const now = Date.now();
     
-    // Only refresh if cache is older than TTL
+    // Only refresh if cache is expired
     if (now - this.lastCacheUpdate < this.CACHE_TTL && this.identifiedCompaniesCache.size > 0) {
       return;
     }
@@ -84,7 +103,7 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
     try {
       console.log('🔄 Refreshing identified companies cache...');
       
-      // FIRST: Load the master never-analyze list if it exists
+      // Try to load from master list file first
       const fs = require('fs');
       const path = require('path');
       const masterListPath = path.join(process.cwd(), 'never-analyze-companies.json');
@@ -93,15 +112,13 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
         const masterList = JSON.parse(fs.readFileSync(masterListPath, 'utf-8'));
         this.identifiedCompaniesCache.clear();
         
-        // Load all companies from master list
         masterList.companies.forEach((company: string) => {
           this.identifiedCompaniesCache.add(company.toLowerCase().trim());
         });
         
-        console.log(`✅ Loaded ${this.identifiedCompaniesCache.size} companies from master never-analyze list`);
-        console.log(`   Sources: ${masterList.sources.csv} from CSV, ${masterList.sources.database} from DB`);
+        console.log(`✅ Loaded ${this.identifiedCompaniesCache.size} companies from master list`);
       } else {
-        // Fallback: Fetch from database
+        // Fallback to database
         const { data, error } = await this.supabase
           .from('identified_companies')
           .select('company');
@@ -111,20 +128,16 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
           return;
         }
 
-        // Clear and rebuild cache
         this.identifiedCompaniesCache.clear();
         
         if (data && data.length > 0) {
           data.forEach(row => {
             if (row.company) {
-              const normalized = row.company.toLowerCase().trim();
-              this.identifiedCompaniesCache.add(normalized);
+              this.identifiedCompaniesCache.add(row.company.toLowerCase().trim());
             }
           });
           
-          console.log(`✅ Cached ${this.identifiedCompaniesCache.size} unique companies from database`);
-        } else {
-          console.log('⚠️ No companies found in database');
+          console.log(`✅ Cached ${this.identifiedCompaniesCache.size} companies from database`);
         }
       }
       
@@ -134,12 +147,16 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
     }
   }
 
+  /**
+   * Check if company is already identified
+   */
   isCompanyAlreadyIdentified(companyName: string): boolean {
-    // Normalize the company name before checking
-    const normalized = companyName.toLowerCase().trim();
-    return this.identifiedCompaniesCache.has(normalized);
+    return this.identifiedCompaniesCache.has(companyName.toLowerCase().trim());
   }
 
+  /**
+   * Analyze a single job with GPT-5-mini-2025-08-07
+   */
   async analyzeJobWithGPT(job: any): Promise<any> {
     const userPrompt = `Company: ${job.company}
 Job Title: ${job.job_title}
@@ -150,23 +167,15 @@ Job Description: ${job.description}`;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const timeoutMs = 30 * 1000;
-        const apiPromise = this.openai.chat.completions.create({
-          model: 'gpt-5-mini-2025-08-07',  // MUST USE GPT-5-MINI-2025-08-07 ONLY! NEVER CHANGE THIS!
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-5-mini-2025-08-07',  // MUST USE THIS EXACT MODEL
           messages: [
             { role: 'system', content: this.systemPrompt },
             { role: 'user', content: userPrompt }
           ],
           max_completion_tokens: 500
-          // Note: GPT-5-mini doesn't support custom temperature, uses default (1)
+          // Note: GPT-5-mini doesn't support custom temperature
         });
-        
-        const response = await Promise.race([
-          apiPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`OpenAI API timeout after ${timeoutMs/1000}s`)), timeoutMs)
-          )
-        ]) as any;
 
         const result = response.choices[0].message.content?.trim();
         
@@ -174,25 +183,23 @@ Job Description: ${job.description}`;
           throw new Error('Empty response from GPT API');
         }
         
-        // Log successful API call for monitoring
-        console.log(`  ✅ GPT-5-mini responded for ${job.company} (${result.length} chars)`);
+        console.log(`  ✅ GPT-5-mini-2025-08-07 responded (${result.length} chars)`);
         
         try {
-          const analysis = JSON.parse(result);
-          return analysis;
+          return JSON.parse(result);
         } catch (parseError) {
-          console.error(`  ❌ JSON parse error for ${job.company}:`, result.substring(0, 100));
+          console.error(`  ❌ JSON parse error:`, result.substring(0, 100));
           return {
             uses_tool: false,
             tool_detected: "None",
             signal_type: "none",
-            context: "Parse error: " + result.substring(0, 50)
+            context: "Parse error"
           };
         }
         
       } catch (error: any) {
         lastError = error;
-        console.error(`  ❌ Analysis attempt ${attempt} failed:`, error.message);
+        console.error(`  ❌ Attempt ${attempt} failed:`, error.message);
         
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
@@ -203,7 +210,7 @@ Job Description: ${job.description}`;
     }
     
     // All retries failed
-    console.error(`  ❌ Analysis failed for ${job.company} after ${maxRetries} attempts`);
+    console.error(`  ❌ Analysis failed after ${maxRetries} attempts`);
     return {
       uses_tool: false,
       tool_detected: "None",
@@ -212,9 +219,12 @@ Job Description: ${job.description}`;
     };
   }
 
+  /**
+   * Process a batch of jobs
+   */
   async processBatch(batchSize: number = 100): Promise<any> {
-    if (this.stats.isRunning) {
-      console.log('⚠️ Analysis already running, skipping');
+    if (this.isRunning) {
+      console.log('⚠️ Processor already running');
       return { 
         success: false, 
         error: 'Already running',
@@ -222,16 +232,16 @@ Job Description: ${job.description}`;
       };
     }
 
-    console.log(`🤖 PROCESSING BATCH (${batchSize} jobs)`);
+    console.log(`\n🤖 PROCESSING BATCH (${batchSize} jobs)`);
     console.log('='.repeat(60));
     
-    this.stats.isRunning = true;
+    this.isRunning = true;
     
     try {
-      // Refresh the companies cache before processing
+      // Refresh cache before processing
       await this.refreshCompaniesCache();
       
-      // Fetch unprocessed jobs from clean raw_jobs table
+      // Fetch unprocessed jobs
       const { data: jobs, error } = await this.supabase
         .from('raw_jobs')
         .select('*')
@@ -240,7 +250,6 @@ Job Description: ${job.description}`;
         .limit(batchSize);
       
       if (error) {
-        console.error('❌ Error fetching unprocessed jobs:', error);
         throw error;
       }
       
@@ -249,33 +258,31 @@ Job Description: ${job.description}`;
         return { 
           success: true, 
           message: 'No jobs to process',
-          jobsProcessed: 0,
-          toolsDetected: 0,
-          skippedAlreadyIdentified: 0
+          jobsProcessed: 0
         };
       }
       
-      console.log(`📋 Found ${jobs.length} unprocessed jobs to analyze\n`);
+      console.log(`📋 Found ${jobs.length} unprocessed jobs\n`);
       
       let processed = 0;
       let toolsFound = 0;
       let skipped = 0;
       let errors = 0;
       
-      // Process jobs sequentially to avoid overwhelming OpenAI
+      // Process jobs sequentially
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         
-        console.log(`[${i+1}/${jobs.length}] Checking: ${job.company} - ${job.job_title}`);
+        console.log(`[${i+1}/${jobs.length}] ${job.company} - ${job.job_title}`);
         
         try {
-          // CHECK IF COMPANY IS ALREADY IDENTIFIED
+          // Check if already identified
           if (this.isCompanyAlreadyIdentified(job.company)) {
-            console.log(`  ⏭️ SKIPPED: ${job.company} - Already in database/CSV (cache has ${this.identifiedCompaniesCache.size} companies)`);
+            console.log(`  ⏭️ SKIPPED: Already identified`);
             skipped++;
             
-            // Mark job as processed without analyzing
-            const { error: updateError } = await this.supabase
+            // Mark as processed without analyzing
+            await this.supabase
               .from('raw_jobs')
               .update({ 
                 processed: true,
@@ -283,44 +290,30 @@ Job Description: ${job.description}`;
               })
               .eq('job_id', job.job_id);
             
-            if (updateError) {
-              console.error('  ❌ Failed to mark job as processed:', updateError.message);
-              errors++;
-            } else {
-              await this.supabase
-                .from('processed_jobs')
-                .upsert({ 
-                  job_id: job.job_id, 
-                  analyzed_date: new Date().toISOString() 
-                }, { onConflict: 'job_id' });
-              
-              processed++;
-            }
-            
-            continue; // Skip to next job
+            processed++;
+            continue;
           }
           
-          // Company not identified yet, analyze with GPT
+          // Analyze with GPT
           console.log(`  🔍 Analyzing with GPT-5-mini-2025-08-07...`);
           const analysis = await this.analyzeJobWithGPT(job);
           
-          // CRITICAL: Only mark as processed if we got a valid response
+          // Validate response before marking as processed
           if (!analysis || !analysis.hasOwnProperty('uses_tool')) {
-            console.error(`  ❌ Invalid or no analysis returned for ${job.company} - NOT marking as processed`);
-            console.error(`     Analysis result:`, analysis);
+            console.error(`  ❌ Invalid analysis - NOT marking as processed`);
             errors++;
-            continue; // Skip to next job without marking as processed
+            continue;
           }
           
-          // Additional validation: ensure it's a proper analysis result
+          // Check for API errors
           if (analysis.context && analysis.context.includes('API error')) {
-            console.error(`  ❌ API error in analysis for ${job.company} - NOT marking as processed`);
+            console.error(`  ❌ API error - NOT marking as processed`);
             errors++;
             continue;
           }
           
           if (analysis.uses_tool) {
-            // Only process Outreach.io and SalesLoft
+            // Only save Outreach.io and SalesLoft
             if (analysis.tool_detected === 'Outreach.io' || 
                 analysis.tool_detected === 'SalesLoft' || 
                 analysis.tool_detected === 'Both') {
@@ -328,20 +321,8 @@ Job Description: ${job.description}`;
               console.log(`  🎯 DETECTED: ${analysis.tool_detected}`);
               toolsFound++;
               
-              // Create notification for company discovery
-              await this.createNotification(
-                'company_discovered',
-                `New company found: ${job.company}`,
-                `${job.company} uses ${analysis.tool_detected} (found in "${job.job_title}")`,
-                {
-                  company: job.company,
-                  tool: analysis.tool_detected,
-                  jobTitle: job.job_title
-                }
-              );
-              
-              // Save to identified_companies with source tracking
-              const { error: companyError } = await this.supabase
+              // Save to database
+              await this.supabase
                 .from('identified_companies')
                 .upsert({
                   company: job.company,
@@ -350,7 +331,6 @@ Job Description: ${job.description}`;
                   context: analysis.context || '',
                   job_title: job.job_title,
                   job_url: job.job_url,
-                  linkedin_url: '',
                   platform: job.platform,
                   identified_date: new Date().toISOString()
                 }, { 
@@ -358,22 +338,23 @@ Job Description: ${job.description}`;
                   ignoreDuplicates: false 
                 });
               
-              if (companyError) {
-                console.error('  ❌ Failed to save company:', companyError.message);
-                errors++;
-              } else {
-                // Add to cache immediately with proper normalization
-                const normalized = job.company.toLowerCase().trim();
-                this.identifiedCompaniesCache.add(normalized);
-                console.log(`  📝 Added "${job.company}" to cache as "${normalized}"`);
-              }
+              // Add to cache
+              this.identifiedCompaniesCache.add(job.company.toLowerCase().trim());
+              
+              // Create notification
+              await this.createNotification(
+                'company_discovered',
+                `New company: ${job.company}`,
+                `Uses ${analysis.tool_detected}`,
+                { company: job.company, tool: analysis.tool_detected }
+              );
             }
           } else {
             console.log(`  ✓ No tools detected`);
           }
           
           // Mark job as processed
-          const { error: updateError } = await this.supabase
+          await this.supabase
             .from('raw_jobs')
             .update({ 
               processed: true,
@@ -381,30 +362,18 @@ Job Description: ${job.description}`;
             })
             .eq('job_id', job.job_id);
           
-          if (updateError) {
-            console.error('  ❌ Failed to mark job as processed:', updateError.message);
-            errors++;
-          } else {
-            // Add to processed_jobs tracking
-            await this.supabase
-              .from('processed_jobs')
-              .upsert({ 
-                job_id: job.job_id, 
-                analyzed_date: new Date().toISOString() 
-              }, { onConflict: 'job_id' });
-            
-            processed++;
-          }
+          processed++;
           
         } catch (error: any) {
-          console.error(`  ❌ Error processing job ${job.job_id}:`, error.message);
+          console.error(`  ❌ Error:`, error.message);
           errors++;
         }
         
-        // Small delay to avoid rate limits
+        // Small delay between jobs
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       
+      // Update stats
       this.stats.totalAnalyzed += processed;
       this.stats.toolsDetected += toolsFound;
       this.stats.skippedAlreadyIdentified += skipped;
@@ -412,31 +381,17 @@ Job Description: ${job.description}`;
       
       console.log('\n✅ BATCH COMPLETE');
       console.log(`   Jobs processed: ${processed}/${jobs.length}`);
-      console.log(`   Skipped (already identified): ${skipped}`);
+      console.log(`   Skipped: ${skipped}`);
       console.log(`   Tools detected: ${toolsFound}`);
       console.log(`   Errors: ${errors}`);
       
-      // Create notification for batch completion
-      if (processed > 0) {
-        await this.createNotification(
-          'analysis_complete',
-          `Analyzed ${processed} jobs`,
-          `Completed batch: ${toolsFound} companies found using sales tools`,
-          {
-            jobsCount: processed,
-            companiesFound: toolsFound,
-            skipped: skipped
-          }
-        );
-      }
-      
-      // Check remaining unprocessed jobs
+      // Check remaining
       const { count: remaining } = await this.supabase
         .from('raw_jobs')
         .select('*', { count: 'exact', head: true })
         .eq('processed', false);
       
-      console.log(`   Remaining unprocessed: ${remaining || 0}`);
+      console.log(`   Remaining: ${remaining || 0}`);
       
       return {
         success: true,
@@ -449,7 +404,6 @@ Job Description: ${job.description}`;
       
     } catch (error: any) {
       console.error('❌ Batch processing failed:', error.message);
-      this.stats.errors++;
       return {
         success: false,
         error: error.message,
@@ -457,13 +411,16 @@ Job Description: ${job.description}`;
       };
       
     } finally {
-      this.stats.isRunning = false;
+      this.isRunning = false;
     }
   }
 
+  /**
+   * Get current status
+   */
   getStatus() {
     return {
-      isRunning: this.stats.isRunning,
+      isRunning: this.isRunning,
       totalAnalyzed: this.stats.totalAnalyzed,
       toolsDetected: this.stats.toolsDetected,
       skippedAlreadyIdentified: this.stats.skippedAlreadyIdentified,
@@ -471,4 +428,31 @@ Job Description: ${job.description}`;
       cachedCompanies: this.identifiedCompaniesCache.size
     };
   }
+
+  /**
+   * Process a single job (for testing)
+   */
+  async processSingleJob(jobId: string): Promise<any> {
+    const { data: job, error } = await this.supabase
+      .from('raw_jobs')
+      .select('*')
+      .eq('job_id', jobId)
+      .single();
+    
+    if (error || !job) {
+      return { success: false, error: 'Job not found' };
+    }
+    
+    console.log(`Processing single job: ${job.company}`);
+    const analysis = await this.analyzeJobWithGPT(job);
+    
+    return {
+      success: true,
+      job: job,
+      analysis: analysis
+    };
+  }
 }
+
+// Export singleton instance
+export const unifiedProcessor = new UnifiedProcessorService();

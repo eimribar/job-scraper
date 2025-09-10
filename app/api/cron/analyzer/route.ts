@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { ContinuousAnalyzerService } from '@/lib/services/continuousAnalyzerService';
+// Using unified processor - single source of truth
+import { unifiedProcessor } from '@/lib/services/unifiedProcessorService';
 
 // Helper function to check if request is from Vercel Cron
 function isVercelCron(request: Request): boolean {
@@ -30,10 +31,8 @@ async function runAnalyzer() {
   try {
     console.log('🤖 Analyzer cron triggered at', new Date().toISOString());
 
-    const analyzer = new ContinuousAnalyzerService();
-    
     // Check if already running
-    const status = analyzer.getStatus();
+    const status = unifiedProcessor.getStatus();
     if (status.isRunning) {
       console.log('⚠️ Analyzer already running, skipping');
       return NextResponse.json({
@@ -43,8 +42,8 @@ async function runAnalyzer() {
       });
     }
 
-    // Process batch of jobs (100 jobs = ~2-3 minutes)
-    const result = await analyzer.processBatch(100);
+    // Process batch of 100 jobs (each analyzed individually with GPT-5-mini-2025-08-07)
+    const result = await unifiedProcessor.processBatch(100);
     
     const duration = Date.now() - startTime;
 
@@ -115,8 +114,7 @@ export async function GET(request: Request) {
   
   // Otherwise return status
   try {
-    const analyzer = new ContinuousAnalyzerService();
-    const supabase = (analyzer as any).supabase;
+    const supabase = (unifiedProcessor as any).supabase;
     
     // Check unprocessed jobs count
     const { count: unprocessedCount } = await supabase
@@ -133,13 +131,13 @@ export async function GET(request: Request) {
       .gte('analyzed_date', oneHourAgo.toISOString());
     
     return NextResponse.json({ 
-      message: 'Continuous analyzer endpoint',
+      message: 'Unified processor endpoint',
       schedule: 'Every 5 minutes',
-      status: analyzer.getStatus(),
+      status: unifiedProcessor.getStatus(),
       unprocessedJobs: unprocessedCount || 0,
       jobsProcessedLastHour: recentlyProcessed || 0,
-      processingRate: '100 jobs per run (every 5 min)',
-      dailyCapacity: '28,800 jobs',
+      processingRate: '100 jobs per run (every 5 min) - Each analyzed individually with GPT-5-mini-2025-08-07',
+      dailyCapacity: '28,800 jobs (with individual GPT-5-mini-2025-08-07 analysis per job)',
       nextRun: new Date(Math.ceil(Date.now() / (5 * 60 * 1000)) * (5 * 60 * 1000)).toISOString()
     });
   } catch (error) {
