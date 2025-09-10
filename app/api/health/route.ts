@@ -11,14 +11,28 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const detailed = searchParams.get('detailed') === 'true';
     
-    // Check database connectivity
-    const { data: dbTest, error: dbError } = await supabase
+    // Check database connectivity - use raw_jobs as fallback
+    let dbConnected = true;
+    let searchTermsExists = true;
+    
+    // Try search_terms first
+    const { error: searchTermsError } = await supabase
       .from('search_terms')
       .select('*', { count: 'exact', head: true })
       .limit(1);
     
-    if (dbError) {
-      throw new Error(`Database connection failed: ${dbError.message}`);
+    if (searchTermsError) {
+      searchTermsExists = false;
+      // Fallback to raw_jobs for connectivity check
+      const { error: rawJobsError } = await supabase
+        .from('raw_jobs')
+        .select('*', { count: 'exact', head: true })
+        .limit(1);
+      
+      if (rawJobsError) {
+        dbConnected = false;
+        throw new Error(`Database connection failed: ${rawJobsError.message}`);
+      }
     }
 
     // Check recent activity
@@ -31,13 +45,18 @@ export async function GET(request: NextRequest) {
       .eq('processed', true)
       .gte('analyzed_date', oneHourAgo.toISOString());
     
-    // Check if any search terms need scraping
+    // Check if any search terms need scraping (only if table exists)
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const { count: overdueTerms } = await supabase
-      .from('search_terms')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true)
-      .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);
+    let overdueTerms = 0;
+    
+    if (searchTermsExists) {
+      const { count } = await supabase
+        .from('search_terms')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .or(`last_scraped_date.is.null,last_scraped_date.lt.${oneWeekAgo.toISOString()}`);
+      overdueTerms = count || 0;
+    }
     
     // Check unprocessed jobs backlog
     const { count: unprocessedJobs } = await supabase

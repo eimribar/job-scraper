@@ -18,7 +18,12 @@ interface StatCard {
 
 // Memoized component for better performance
 export const QuickStatsOptimized = memo(function QuickStatsOptimized() {
-  const { data: rawStats, isLoading, error } = useDashboardStats();
+  const { data: rawStats, isLoading, error, isError } = useDashboardStats();
+  
+  // Debug logging in development
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    console.log('QuickStats state:', { isLoading, isError, hasData: !!rawStats, error });
+  }
 
   // Transform stats data into display format
   const stats: StatCard[] = rawStats ? [
@@ -71,8 +76,8 @@ export const QuickStatsOptimized = memo(function QuickStatsOptimized() {
     );
   }
 
-  // Loading state
-  if (isLoading) {
+  // Loading state - show for initial load only
+  if (isLoading && !rawStats) {
     return (
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map(i => (
@@ -82,6 +87,17 @@ export const QuickStatsOptimized = memo(function QuickStatsOptimized() {
             <div className="h-3 bg-slate-200 rounded w-2/3" />
           </Card>
         ))}
+      </div>
+    );
+  }
+  
+  // If no data and not loading, show placeholder
+  if (!rawStats && !isLoading) {
+    return (
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="col-span-full bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+          <p className="text-yellow-600 text-sm">Loading statistics...</p>
+        </div>
       </div>
     );
   }
