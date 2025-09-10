@@ -24,43 +24,18 @@ BEGIN
 END $$;
 
 -- ========================================
--- 2. ENSURE SEARCH_TERMS TABLE EXISTS
+-- 2. VERIFY SEARCH_TERMS TABLE EXISTS
 -- ========================================
--- Check if we need to create search_terms or if it already exists
+-- Just check that search_terms exists (no migration from search_terms_clean)
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.tables 
         WHERE table_name = 'search_terms'
     ) THEN
-        -- Create search_terms table
-        CREATE TABLE public.search_terms (
-            id SERIAL PRIMARY KEY,
-            search_term TEXT UNIQUE NOT NULL,
-            priority INTEGER DEFAULT 5,
-            is_active BOOLEAN DEFAULT true,
-            last_scraped_date TIMESTAMP WITH TIME ZONE,
-            jobs_found_count INTEGER DEFAULT 0,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-        
-        -- Copy data from search_terms_clean if it exists
-        IF EXISTS (
-            SELECT 1 FROM information_schema.tables 
-            WHERE table_name = 'search_terms_clean'
-        ) THEN
-            INSERT INTO search_terms (search_term, priority, is_active, last_scraped_date, jobs_found_count, created_at, updated_at)
-            SELECT search_term, priority, is_active, last_scraped_date, jobs_found_count, created_at, updated_at
-            FROM search_terms_clean
-            ON CONFLICT (search_term) DO NOTHING;
-            
-            RAISE NOTICE 'Migrated data from search_terms_clean to search_terms';
-        END IF;
-        
-        RAISE NOTICE 'Created search_terms table';
+        RAISE NOTICE 'WARNING: search_terms table does not exist! You may need to create it.';
     ELSE
-        RAISE NOTICE 'search_terms table already exists';
+        RAISE NOTICE '✅ search_terms table exists';
     END IF;
 END $$;
 
@@ -96,29 +71,9 @@ BEGIN
 END $$;
 
 -- ========================================
--- 4. REMOVE SEARCH_TERMS_CLEAN (after migration)
+-- 4. Note: search_terms_clean will be deleted manually
 -- ========================================
--- Only drop if search_terms exists and has data
-DO $$
-DECLARE
-    search_terms_count INT;
-    search_terms_clean_count INT;
-BEGIN
-    -- Count rows in both tables
-    SELECT COUNT(*) INTO search_terms_count 
-    FROM information_schema.tables 
-    WHERE table_name = 'search_terms';
-    
-    SELECT COUNT(*) INTO search_terms_clean_count 
-    FROM information_schema.tables 
-    WHERE table_name = 'search_terms_clean';
-    
-    -- Only drop search_terms_clean if search_terms exists
-    IF search_terms_count > 0 AND search_terms_clean_count > 0 THEN
-        DROP TABLE IF EXISTS search_terms_clean CASCADE;
-        RAISE NOTICE 'Removed search_terms_clean table';
-    END IF;
-END $$;
+-- User will manually delete search_terms_clean table
 
 -- ========================================
 -- 5. CHECK FOR MISSING TABLES
