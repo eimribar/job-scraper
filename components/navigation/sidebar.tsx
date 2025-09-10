@@ -108,7 +108,7 @@ export function Sidebar({ className }: SidebarProps) {
     },
     {
       label: 'Admin',
-      href: '/admin/users',
+      href: '/admin',
       icon: Shield,
       isActive: pathname.startsWith('/admin'),
       requiresAdmin: true,

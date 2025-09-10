@@ -51,7 +51,17 @@ export function UsersTable({ users: initialUsers }: UsersTableProps) {
         .update({ role: newRole, updated_at: new Date().toISOString() })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        // If table doesn't exist, still update local state for UI consistency
+        if (error.code === '42P01') { // Table doesn't exist error
+          setUsers(users.map(user => 
+            user.id === userId ? { ...user, role: newRole } : user
+          ));
+          toast.success('Role updated locally (database table pending creation)');
+          return;
+        }
+        throw error;
+      }
 
       setUsers(users.map(user => 
         user.id === userId ? { ...user, role: newRole } : user
