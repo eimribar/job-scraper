@@ -93,7 +93,7 @@ Job Description: ${job.description}`;
     const timeoutMs = 30 * 1000; // 30 seconds
     
     const apiPromise = this.openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-5-mini-2025-08-07', // Using GPT-5-mini as configured
+      model: 'gpt-5-mini-2025-08-07', // MUST USE THIS EXACT MODEL - NEVER CHANGE
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }

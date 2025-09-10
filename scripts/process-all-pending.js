@@ -46,13 +46,13 @@ Return ONLY valid JSON.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-5-2025-08-07',  // USING GPT-5 AS SPECIFIED!
+      model: 'gpt-5-mini-2025-08-07',  // MUST USE THIS EXACT MODEL - NEVER CHANGE
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_completion_tokens: 500,  // Increased for GPT-5
-      reasoning_effort: 'low'  // Use low reasoning effort for efficiency
+      max_completion_tokens: 500
+      // Note: GPT-5-mini doesn't support temperature or reasoning_effort
     });
 
     const result = response.choices[0].message.content?.trim();

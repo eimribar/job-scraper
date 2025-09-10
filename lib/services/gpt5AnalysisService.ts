@@ -1,111 +1,63 @@
 /**
- * GPT-5 Analysis Service
- * CRITICAL: This service uses GPT-5 ONLY via the Responses API
- * NEVER fallback to GPT-4, GPT-4.1, or any other model
+ * GPT-5-mini Analysis Service
+ * CRITICAL: This service uses GPT-5-mini-2025-08-07 ONLY via Chat Completions API
+ * NEVER fallback to GPT-4 or any other model
+ * NEVER change the model unless explicitly told
  */
 
 import { RawJob, AnalysisResult } from '@/types';
-
-const GPT5_MODEL = 'gpt-5'; // ONLY USE GPT-5
+import OpenAI from 'openai';
 
 export class GPT5AnalysisService {
-  private apiKey: string;
-  private model: string = 'gpt-5-mini'; // Use mini for faster/cheaper processing
+  private openai: OpenAI;
+  private readonly model: string = 'gpt-5-mini-2025-08-07'; // MUST USE THIS EXACT MODEL
 
   constructor() {
-    // Defer initialization to avoid build-time errors
-    this.apiKey = process.env.OPENAI_API_KEY || '';
-  }
-  
-  private ensureApiKey() {
-    if (!this.apiKey) {
-      this.apiKey = process.env.OPENAI_API_KEY || '';
-      if (!this.apiKey) {
-        throw new Error('OPENAI_API_KEY is not configured');
-      }
-    }
+    // Initialize OpenAI client
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
   }
 
   /**
-   * Analyze a job description using GPT-5 Responses API
-   * NEVER use Chat Completions API or other models
+   * Analyze a job description using GPT-5-mini-2025-08-07 Chat Completions API
+   * NEVER use Responses API or other models
    */
   async analyzeJob(job: RawJob): Promise<AnalysisResult> {
-    this.ensureApiKey();
-    const prompt = this.buildPrompt(job);
+    const systemPrompt = this.buildSystemPrompt();
+    const userPrompt = this.buildUserPrompt(job);
     
     try {
-      // Use GPT-5 Responses API - NOT Chat Completions
-      const response = await fetch('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model, // GPT-5 ONLY
-          input: prompt,
-          reasoning: { 
-            effort: 'minimal' // Fastest reasoning for simple tool detection
-          },
-          text: { 
-            verbosity: 'low' // Concise JSON output
-          }
-          // NO temperature parameter - not supported in GPT-5
-        })
+      // Use GPT-5-mini Chat Completions API - NOT Responses API
+      const response = await this.openai.chat.completions.create({
+        model: this.model, // gpt-5-mini-2025-08-07 ONLY
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_completion_tokens: 500
+        // Note: GPT-5-mini doesn't support custom temperature
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error(`GPT-5 API error: ${response.status} - ${error.substring(0, 500)}`);
-        // Return default result on API error instead of throwing
-        return {
-          uses_tool: false,
-          tool_detected: 'none',
-          signal_type: 'none',
-          context: '',
-          confidence: 'low',
-          job_id: job.job_id,
-          company: job.company,
-          job_title: job.job_title,
-          job_url: job.job_url,
-          platform: job.platform || 'LinkedIn',
-          error: `API Error: ${response.status}`
-        };
-      }
-
-      const data = await response.json();
+      const result = response.choices[0].message.content?.trim();
       
-      // GPT-5 Responses API structure: output[1].content[0].text
-      let outputText = '';
-      
-      // Extract text from the correct location in the response
-      if (data.output && Array.isArray(data.output) && data.output.length > 1) {
-        const messageOutput = data.output[1]; // Second item is the message
-        if (messageOutput && messageOutput.content && Array.isArray(messageOutput.content)) {
-          const textContent = messageOutput.content.find(c => c.type === 'output_text');
-          if (textContent && textContent.text) {
-            outputText = textContent.text;
-          }
-        }
+      if (!result || result.length === 0) {
+        throw new Error('Empty response from GPT API');
       }
       
-      // If no text found, log the structure for debugging
-      if (!outputText) {
-        console.log('GPT-5 Response structure:', JSON.stringify(data, null, 2).substring(0, 500));
-      }
+      console.log(`  ✅ GPT-5-mini-2025-08-07 responded (${result.length} chars)`);
       
-      // Parse the extracted text as JSON
+      // Parse the response as JSON
       let analysisResult;
       try {
-        analysisResult = outputText ? JSON.parse(outputText) : {};
+        analysisResult = JSON.parse(result);
       } catch (parseError) {
-        console.error('Failed to parse GPT-5 output:', outputText);
+        console.error('Failed to parse GPT-5-mini output:', result.substring(0, 100));
         analysisResult = {
           uses_tool: false,
           tool_detected: 'none',
           signal_type: 'none',
-          context: '',
+          context: 'Parse error',
           confidence: 'low'
         };
       }
@@ -123,8 +75,8 @@ export class GPT5AnalysisService {
         platform: job.platform || 'LinkedIn'
       };
       
-    } catch (error) {
-      console.error('GPT-5 analysis error:', error);
+    } catch (error: any) {
+      console.error('GPT-5-mini analysis error:', error.message);
       // Return a default result on error - DO NOT fallback to another model
       return {
         uses_tool: false,
@@ -143,47 +95,50 @@ export class GPT5AnalysisService {
   }
 
   /**
-   * Build the analysis prompt for GPT-5
+   * Build the system prompt for GPT-5-mini
    */
-  private buildPrompt(job: RawJob): string {
-    return `Analyze this job description to identify if the company uses Outreach.io or SalesLoft.
+  private buildSystemPrompt(): string {
+    return `You are an expert at analyzing job descriptions to identify if companies use Outreach.io or SalesLoft.
 
-IMPORTANT RULES:
-1. Distinguish between "Outreach" (the tool) and "outreach" (general sales activity)
-2. Look for explicit tool mentions, not general sales terms
-3. Return ONLY valid JSON, no additional text
+IMPORTANT: Distinguish between "Outreach" (the tool) and "outreach" (general sales activity).
 
 Valid indicators for Outreach.io:
-- "Outreach.io" (explicit mention)
+- "Outreach.io"
 - "Outreach platform"
 - "Outreach sequences"
-- Capitalized "Outreach" when listed with other tools (e.g., "Salesforce, Outreach, HubSpot")
-- "experience with Outreach" (when clearly referring to the tool)
+- Capitalized "Outreach" listed with other tools
+- "experience with Outreach"
+
+Valid indicators for SalesLoft:
+- "SalesLoft"
+- "Sales Loft"
+- "Salesloft"
+- "experience with SalesLoft"
 
 NOT valid (just general sales terms):
 - "sales outreach"
 - "cold outreach"
 - "outreach efforts"
 - "customer outreach"
-- lowercase "outreach" in general context
 
-Valid indicators for SalesLoft:
-- "SalesLoft" or "Sales Loft"
-- "Salesloft platform"
-- Listed with other sales tools
+You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSON object:
 
-Company: ${job.company}
-Job Title: ${job.job_title}
-Description: ${job.description || 'No description available'}
-
-Return this exact JSON structure:
 {
-  "uses_tool": true or false,
-  "tool_detected": "Outreach.io" or "SalesLoft" or "Both" or "none",
-  "signal_type": "required" or "preferred" or "stack_mention" or "none",
-  "context": "exact quote from the job description mentioning the tool (max 200 chars)",
-  "confidence": "high" or "medium" or "low"
+  "uses_tool": true,
+  "tool_detected": "Outreach.io",
+  "signal_type": "required",
+  "context": "exact quote mentioning the tool",
+  "confidence": "high"
 }`;
+  }
+
+  /**
+   * Build the user prompt for GPT-5-mini
+   */
+  private buildUserPrompt(job: RawJob): string {
+    return `Company: ${job.company}
+Job Title: ${job.job_title}
+Job Description: ${job.description || 'No description available'}`;
   }
 
   /**
