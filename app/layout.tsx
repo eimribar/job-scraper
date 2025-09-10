@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { ReactQueryProvider } from "@/lib/providers/react-query-provider";
 import { ToastContainer } from "@/components/ui/toast";
 import { MinimalNavigationProgress } from "@/components/ui/navigation-progress";
-import { Sidebar } from "@/components/navigation/sidebar";
+import { AppLayout } from "@/components/layout/app-layout";
 import "./globals.css";
 
 const inter = Inter({ 
@@ -42,9 +42,7 @@ export default function RootLayout({
         </Suspense>
         <ReactQueryProvider>
           <div className="relative min-h-screen">
-            <Sidebar />
-            {/* Main content area adjusted for sidebar */}
-            <div className="ml-16 min-h-screen">
+            <AppLayout>
               <Suspense fallback={
                 <div className="flex items-center justify-center min-h-screen">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -52,7 +50,7 @@ export default function RootLayout({
               }>
                 {children}
               </Suspense>
-            </div>
+            </AppLayout>
             <ToastContainer />
           </div>
         </ReactQueryProvider>
