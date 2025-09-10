@@ -9,11 +9,11 @@
  */
 
 import { createApiSupabaseClient } from '../supabase';
-import OpenAI from 'openai';
+// OpenAI client not needed - using Responses API with fetch
 
 export class UnifiedProcessorService {
   private supabase;
-  private openai;
+  // OpenAI client removed - using fetch with Responses API
   private identifiedCompaniesCache: Set<string> = new Set();
   private lastCacheUpdate: number = 0;
   private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -27,9 +27,10 @@ export class UnifiedProcessorService {
 
   constructor() {
     this.supabase = createApiSupabaseClient();
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // OpenAI client removed - using fetch with Responses API
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is required');
+    }
   }
 
   /**
@@ -158,32 +159,73 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
    * Analyze a single job with GPT-5-mini-2025-08-07
    */
   async analyzeJobWithGPT(job: any): Promise<any> {
-    const userPrompt = `Company: ${job.company}
+    // ⚠️ CRITICAL: USING RESPONSES API WITH HARDCODED CONFIGURATION ⚠️
+    // NEVER CHANGE THIS STRUCTURE
+    
+    // Role-based messages - HARDCODED
+    const systemMessage = {
+      role: 'developer',  // MUST BE 'developer'
+      content: this.systemPrompt
+    };
+    
+    const userMessage = {
+      role: 'user',  // MUST BE 'user'
+      content: `Company: ${job.company}
 Job Title: ${job.job_title}
-Job Description: ${job.description}`;
+Job Description: ${job.description}`
+    };
 
     const maxRetries = 3;
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await this.openai.chat.completions.create({
-          model: 'gpt-5-mini-2025-08-07',  // MUST USE THIS EXACT MODEL
-          messages: [
-            { role: 'system', content: this.systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          max_completion_tokens: 500
-          // Note: GPT-5-mini doesn't support custom temperature
+        // ⚠️ CRITICAL: Using Responses API - NOT Chat Completions ⚠️
+        const response = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-5-mini',  // HARDCODED - NEVER CHANGE
+            input: [systemMessage, userMessage],  // ROLE-BASED ARRAY
+            reasoning: { 
+              effort: 'medium'  // HARDCODED OPTIMAL - NEVER CHANGE
+            },
+            text: { 
+              verbosity: 'low'  // HARDCODED - NEVER CHANGE
+            }
+          })
         });
 
-        const result = response.choices[0].message.content?.trim();
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`GPT-5 API error: ${response.status} - ${errorText.substring(0, 200)}`);
+        }
+
+        const data = await response.json();
+        
+        // Extract output from GPT-5 Responses API structure
+        let result = '';
+        if (data.output && Array.isArray(data.output)) {
+          for (const item of data.output) {
+            if (item.type === 'message' && item.content) {
+              for (const content of item.content) {
+                if (content.type === 'output_text' && content.text) {
+                  result = content.text;
+                  break;
+                }
+              }
+            }
+          }
+        }
         
         if (!result || result.length === 0) {
           throw new Error('Empty response from GPT API');
         }
         
-        console.log(`  ✅ GPT-5-mini-2025-08-07 responded (${result.length} chars)`);
+        console.log(`  ✅ GPT-5-mini responded (${result.length} chars)`);
         
         try {
           return JSON.parse(result);

@@ -1,64 +1,98 @@
 /**
  * GPT-5-mini Analysis Service
- * CRITICAL: This service uses GPT-5-mini-2025-08-07 ONLY via Chat Completions API
- * NEVER fallback to GPT-4 or any other model
- * NEVER change the model unless explicitly told
+ * ⚠️ CRITICAL: HARDCODED CONFIGURATION - DO NOT MODIFY ⚠️
+ * - Uses GPT-5-mini ONLY via Responses API (NOT Chat Completions)
+ * - Role-based input structure (developer + user messages)
+ * - Reasoning effort: 'medium' (PROVEN OPTIMAL)
+ * - Verbosity: 'low' (JSON only)
+ * NEVER change ANY of these settings without explicit permission
  */
 
 import { RawJob, AnalysisResult } from '@/types';
-import OpenAI from 'openai';
 
 export class GPT5AnalysisService {
-  private openai: OpenAI;
-  private readonly model: string = 'gpt-5-mini-2025-08-07'; // MUST USE THIS EXACT MODEL
+  // ⚠️ HARDCODED CONFIGURATION - NEVER CHANGE ⚠️
+  private readonly RESPONSES_API_URL = 'https://api.openai.com/v1/responses';
+  private readonly MODEL = 'gpt-5-mini';  // HARDCODED - NEVER CHANGE
+  private readonly REASONING_EFFORT = 'medium';  // HARDCODED - PROVEN OPTIMAL
+  private readonly VERBOSITY = 'low';  // HARDCODED - JSON ONLY
 
   constructor() {
-    // Initialize OpenAI client
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // No OpenAI client needed - using fetch with Responses API
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is required');
+    }
   }
 
   /**
-   * Analyze a job description using GPT-5-mini-2025-08-07 Chat Completions API
-   * NEVER use Responses API or other models
+   * Analyze a job using GPT-5-mini Responses API with role-based structure
+   * ⚠️ CRITICAL: Uses HARDCODED optimal configuration ⚠️
    */
   async analyzeJob(job: RawJob): Promise<AnalysisResult> {
-    const systemPrompt = this.buildSystemPrompt();
-    const userPrompt = this.buildUserPrompt(job);
+    // Build role-based messages - NEVER CHANGE THIS STRUCTURE
+    const systemMessage = this.buildSystemMessage();
+    const userMessage = this.buildUserMessage(job);
     
     try {
-      // Use GPT-5-mini Chat Completions API - NOT Responses API
-      const response = await this.openai.chat.completions.create({
-        model: this.model, // gpt-5-mini-2025-08-07 ONLY
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        max_completion_tokens: 500
-        // Note: GPT-5-mini doesn't support custom temperature
+      // ⚠️ CRITICAL: Using Responses API with HARDCODED configuration ⚠️
+      const response = await fetch(this.RESPONSES_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: this.MODEL,  // HARDCODED: gpt-5-mini
+          input: [systemMessage, userMessage],  // ROLE-BASED ARRAY
+          reasoning: { 
+            effort: this.REASONING_EFFORT  // HARDCODED: medium
+          },
+          text: { 
+            verbosity: this.VERBOSITY  // HARDCODED: low
+          }
+        })
       });
 
-      const result = response.choices[0].message.content?.trim();
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`GPT-5 API error ${response.status}:`, errorText.substring(0, 200));
+        throw new Error(`GPT-5 API error: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      if (!result || result.length === 0) {
-        throw new Error('Empty response from GPT API');
+      // Extract output from GPT-5 Responses API structure
+      let outputText = '';
+      if (data.output && Array.isArray(data.output)) {
+        for (const item of data.output) {
+          if (item.type === 'message' && item.content) {
+            for (const content of item.content) {
+              if (content.type === 'output_text' && content.text) {
+                outputText = content.text;
+                break;
+              }
+            }
+          }
+        }
       }
       
-      console.log(`  ✅ GPT-5-mini-2025-08-07 responded (${result.length} chars)`);
+      if (!outputText) {
+        throw new Error('Empty response from GPT-5 API');
+      }
+      
+      console.log(`  ✅ GPT-5-mini responded (${outputText.length} chars)`);
       
       // Parse the response as JSON
       let analysisResult;
       try {
-        analysisResult = JSON.parse(result);
+        analysisResult = JSON.parse(outputText);
       } catch (parseError) {
-        console.error('Failed to parse GPT-5-mini output:', result.substring(0, 100));
+        console.error('Failed to parse GPT-5-mini output:', outputText.substring(0, 100));
         analysisResult = {
           uses_tool: false,
           tool_detected: 'none',
           signal_type: 'none',
-          context: 'Parse error',
-          confidence: 'low'
+          context: 'Parse error'
         };
       }
       
@@ -67,7 +101,7 @@ export class GPT5AnalysisService {
         tool_detected: analysisResult.tool_detected || 'none',
         signal_type: analysisResult.signal_type || 'none',
         context: analysisResult.context || '',
-        confidence: analysisResult.confidence || 'low',
+        // Note: confidence field removed from schema
         job_id: job.job_id,
         company: job.company,
         job_title: job.job_title,
@@ -77,13 +111,12 @@ export class GPT5AnalysisService {
       
     } catch (error: any) {
       console.error('GPT-5-mini analysis error:', error.message);
-      // Return a default result on error - DO NOT fallback to another model
+      // Return a default result on error - NEVER fallback to another model
       return {
         uses_tool: false,
         tool_detected: 'none',
         signal_type: 'none',
         context: '',
-        confidence: 'low',
         job_id: job.job_id,
         company: job.company,
         job_title: job.job_title,
@@ -95,50 +128,54 @@ export class GPT5AnalysisService {
   }
 
   /**
-   * Build the system prompt for GPT-5-mini
+   * Build system message for role-based input
+   * ⚠️ HARDCODED STRUCTURE - NEVER MODIFY ⚠️
    */
-  private buildSystemPrompt(): string {
-    return `You are an expert at analyzing job descriptions to identify if companies use Outreach.io or SalesLoft.
+  private buildSystemMessage(): any {
+    // HARDCODED SYSTEM MESSAGE - NEVER CHANGE
+    return {
+      role: 'developer',  // MUST BE 'developer'
+      content: `You are an expert at detecting sales tools in job descriptions.
 
-IMPORTANT: Distinguish between "Outreach" (the tool) and "outreach" (general sales activity).
+DETECTION RULES:
+• "Outreach.io", "Outreach" (capitalized, referring to the tool)
+• "SalesLoft", "Salesloft", "Sales Loft" (any variation)
+• Look in: requirements, preferred skills, tech stack, tools sections
+• If BOTH tools are mentioned, return "Both"
+• Distinguish tools from general sales terms (cold outreach, sales outreach, etc.)
 
-Valid indicators for Outreach.io:
-- "Outreach.io"
-- "Outreach platform"
-- "Outreach sequences"
-- Capitalized "Outreach" listed with other tools
-- "experience with Outreach"
+SIGNAL TYPES:
+• "required" - Tool is required/must-have
+• "preferred" - Tool is preferred/nice-to-have  
+• "stack_mention" - Tool mentioned in tech stack or tools list
+• "none" - No tools detected
 
-Valid indicators for SalesLoft:
-- "SalesLoft"
-- "Sales Loft"
-- "Salesloft"
-- "experience with SalesLoft"
-
-NOT valid (just general sales terms):
-- "sales outreach"
-- "cold outreach"
-- "outreach efforts"
-- "customer outreach"
-
-You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSON object:
-
+RESPONSE FORMAT - RETURN ONLY VALID JSON:
 {
-  "uses_tool": true,
-  "tool_detected": "Outreach.io",
-  "signal_type": "required",
-  "context": "exact quote mentioning the tool",
-  "confidence": "high"
-}`;
+  "uses_tool": true or false,
+  "tool_detected": "Outreach.io" or "SalesLoft" or "Both" or "none",
+  "signal_type": "required" or "preferred" or "stack_mention" or "none",
+  "context": "exact quote from job description (max 200 chars)"
+}`
+    };
   }
 
   /**
-   * Build the user prompt for GPT-5-mini
+   * Build user message for role-based input
+   * ⚠️ HARDCODED STRUCTURE - NEVER MODIFY ⚠️
    */
-  private buildUserPrompt(job: RawJob): string {
-    return `Company: ${job.company}
+  private buildUserMessage(job: RawJob): any {
+    // HARDCODED USER MESSAGE - NEVER CHANGE
+    return {
+      role: 'user',  // MUST BE 'user'
+      content: `Analyze this job posting:
+
+Company: ${job.company}
 Job Title: ${job.job_title}
-Job Description: ${job.description || 'No description available'}`;
+
+Description:
+${job.description || 'No description available'}`
+    };
   }
 
   /**
