@@ -159,7 +159,7 @@ export class DataService {
         tool_detected: analyzedJob.analysis.tool_detected,
         signal_type: analyzedJob.analysis.signal_type,
         context: analyzedJob.analysis.context,
-        confidence: analyzedJob.analysis.confidence,
+        // confidence field removed - doesn't exist in database
         job_title: analyzedJob.job_title,
         job_url: analyzedJob.job_url,
         linkedin_url: '', // For BDR manual population

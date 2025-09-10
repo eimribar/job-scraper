@@ -78,7 +78,7 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
   ): Promise<void> {
     try {
       await this.supabase.from('notifications').insert({
-        type,
+        notification_type: type,  // Fixed: database uses notification_type, not type
         title,
         message,
         metadata,

@@ -30,7 +30,7 @@ export class ContinuousAnalyzerService {
   ) {
     try {
       await this.supabase.from('notifications').insert({
-        type,  // Fixed: use 'type' not 'notification_type' as per schema
+        notification_type: type,  // Fixed: database uses notification_type
         title,
         message,
         metadata,

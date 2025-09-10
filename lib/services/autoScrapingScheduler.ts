@@ -287,7 +287,7 @@ export class AutoScrapingScheduler {
       await this.supabase
         .from('notifications')
         .insert({
-          type,
+          notification_type: type,  // Fixed: database uses notification_type
           title,
           message,
           metadata: metadata || {}
