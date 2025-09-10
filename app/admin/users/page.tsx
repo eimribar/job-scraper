@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { UsersTable } from './users-table';
+import { UserManagement } from './user-management';
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -83,7 +83,7 @@ export default async function AdminUsersPage() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-6">
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border shadow-lg">
-          <UsersTable users={displayUsers} />
+          <UserManagement users={displayUsers} currentUserId={user.id} />
         </div>
       </main>
     </div>
