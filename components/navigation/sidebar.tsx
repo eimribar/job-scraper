@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Activity, Home, Building2, Zap, Settings, User, ChevronRight, Target } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Activity, Home, Building2, Zap, Settings, User, ChevronRight, Target, Shield, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePrefetchCompanies, usePrefetchDashboardStats } from '@/lib/hooks/useCompanies';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { toast } from 'react-hot-toast';
 
 interface SidebarProps {
   className?: string;
@@ -16,13 +19,66 @@ interface NavigationItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   isActive?: boolean;
+  requiresAdmin?: boolean;
+}
+
+interface UserProfile {
+  email: string;
+  full_name: string | null;
+  role: string;
+  avatar_url: string | null;
 }
 
 export function Sidebar({ className }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const pathname = usePathname();
+  const router = useRouter();
   const prefetchCompanies = usePrefetchCompanies();
   const prefetchDashboardStats = usePrefetchDashboardStats();
+  const supabase = createClient();
+
+  // Fetch user profile on mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      console.log('Auth user:', user?.email, user?.id);
+      
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('email, full_name, role, avatar_url')
+          .eq('id', user.id)
+          .single();
+        
+        console.log('Profile from DB:', profile, 'Error:', error);
+        
+        if (profile) {
+          setUserProfile(profile);
+        } else {
+          // If no profile exists, use auth user data and set admin for your email
+          const isAdmin = user.email === 'eimrib@yess.ai';
+          const userProfileData = {
+            email: user.email || '',
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            role: isAdmin ? 'admin' : 'viewer',
+            avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null
+          };
+          console.log('Setting fallback profile:', userProfileData);
+          setUserProfile(userProfileData);
+        }
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success('Logged out successfully');
+    router.push('/login');
+  };
 
   // Navigation items
   const navigationItems: NavigationItem[] = [
@@ -51,12 +107,19 @@ export function Sidebar({ className }: SidebarProps) {
       isActive: pathname === '/automation',
     },
     {
+      label: 'Admin',
+      href: '/admin/users',
+      icon: Shield,
+      isActive: pathname.startsWith('/admin'),
+      requiresAdmin: true,
+    },
+    {
       label: 'Settings',
       href: '/settings',
       icon: Settings,
       isActive: pathname === '/settings',
     },
-  ];
+  ].filter(item => !item.requiresAdmin || userProfile?.role === 'admin');
 
   // Prefetch data for instant navigation
   useEffect(() => {
@@ -157,18 +220,39 @@ export function Sidebar({ className }: SidebarProps) {
       {/* User Profile Section */}
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center shadow-sm">
-            <User className="h-4 w-4 text-white" />
+          <div className="flex-shrink-0">
+            {userProfile?.avatar_url ? (
+              <img 
+                src={userProfile.avatar_url} 
+                alt={userProfile.full_name || userProfile.email}
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center shadow-sm">
+                <User className="h-4 w-4 text-white" />
+              </div>
+            )}
           </div>
           
           <div className={cn(
             "flex-1 min-w-0 transition-all duration-300 ease-in-out",
             isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 w-0"
           )}>
-            {isExpanded && (
+            {isExpanded && userProfile && (
               <>
-                <p className="text-sm font-medium text-gray-900 truncate">Admin User</p>
-                <p className="text-xs text-gray-500 truncate">admin@salestools.com</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {userProfile.full_name || 'User'}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{userProfile.email}</p>
+                <Button
+                  onClick={handleLogout}
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 w-full justify-start p-0 h-6 text-xs text-gray-600 hover:text-gray-900"
+                >
+                  <LogOut className="h-3 w-3 mr-1" />
+                  Logout
+                </Button>
               </>
             )}
           </div>
