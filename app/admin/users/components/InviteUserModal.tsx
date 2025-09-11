@@ -45,7 +45,8 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
         throw new Error(error.error || 'Failed to invite user');
       }
 
-      toast.success(`Invitation sent to ${formData.email}`);
+      const data = await response.json();
+      toast.success(`User created! ${formData.email} can now sign in with Google.`);
       setFormData({ email: '', full_name: '', role: 'viewer' });
       onClose();
       window.location.reload();
@@ -60,9 +61,9 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md bg-white">
         <DialogHeader>
-          <DialogTitle>Invite New User</DialogTitle>
+          <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>
-            Add a new user to your organization
+            Create a user account that can sign in with Google
           </DialogDescription>
         </DialogHeader>
 
@@ -114,12 +115,12 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Inviting...
+                  Creating...
                 </>
               ) : (
                 <>
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Send Invitation
+                  Create User
                 </>
               )}
             </Button>

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, full_name, role, department, job_title, message } = body;
+    const { email, full_name, role } = body;
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
@@ -34,200 +34,59 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const { data: existingProfile } = await supabase
       .from('user_profiles')
-      .select('id')
+      .select('id, status')
       .eq('email', email)
       .single();
 
     if (existingProfile) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+      // If user exists but is pending, that's ok - they haven't signed in yet
+      if (existingProfile.status === 'pending') {
+        return NextResponse.json({ 
+          error: 'User already created. They can sign in with their Google account.' 
+        }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'User already exists and is active' }, { status: 400 });
     }
 
-    // Generate invitation token
-    const invitationToken = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
-
-    // Create invitation record
-    const { data: invitation, error: inviteError } = await supabase
-      .from('user_invitations')
+    // Create user profile directly - simple and clean
+    const newUserId = crypto.randomUUID();
+    const { data: newProfile, error: createError } = await supabase
+      .from('user_profiles')
       .insert({
-        email,
+        id: newUserId,
+        email: email,
+        full_name: full_name || email.split('@')[0],
         role: role || 'viewer',
-        invited_by: user.id,
-        invitation_token: invitationToken,
-        expires_at: expiresAt.toISOString(),
-        metadata: {
-          full_name,
-          department,
-          job_title,
-          message
-        }
+        status: 'pending', // Will become 'active' when they sign in
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       })
       .select()
       .single();
 
-    if (inviteError) {
-      console.error('Error creating invitation:', inviteError);
-      // Fallback: create temporary user profile
-      const tempId = crypto.randomUUID();
-      const { data: newProfile } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: tempId,
-          email: email,
-          full_name: full_name || email.split('@')[0],
-          role: role || 'viewer',
-          status: 'pending',
-          department,
-          job_title,
-          invited_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      return NextResponse.json({
-        success: true,
-        invitation: {
-          id: tempId,
-          email,
-          status: 'pending'
-        },
-        message: `User ${email} has been added (pending activation)`
-      });
+    if (createError) {
+      console.error('Error creating user profile:', createError);
+      return NextResponse.json({ 
+        error: 'Failed to create user profile' 
+      }, { status: 500 });
     }
-
-    // Log the admin action
-    await supabase
-      .from('user_activity_logs')
-      .insert({
-        user_id: user.id,
-        action: 'USER_INVITED',
-        resource_type: 'user',
-        resource_id: email,
-        details: { email, role }
-      });
-
-    // In a production environment, you would send an actual email here
-    // using a service like SendGrid, Resend, or Supabase Auth email
-    console.log(`Invitation created for ${email} with token: ${invitationToken}`);
 
     return NextResponse.json({
       success: true,
-      invitation: {
-        id: invitation?.id,
-        email: invitation?.email || email,
-        expires_at: invitation?.expires_at
+      user: {
+        id: newUserId,
+        email,
+        full_name: newProfile?.full_name,
+        role: newProfile?.role,
+        status: 'pending'
       },
-      message: `Invitation sent to ${email}`
+      message: `User ${email} created successfully. They can now sign in at ${process.env.NEXT_PUBLIC_APP_URL || 'the platform'} with their Google account.`
     });
 
   } catch (error: any) {
-    console.error('Invite user error:', error);
+    console.error('Create user error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to invite user' },
-      { status: 500 }
-    );
-  }
-}
-
-// Handle bulk invitations
-export async function PUT(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    
-    // Check if user is authenticated
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Verify admin access
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-    
-    const isAdmin = profile?.role === 'admin' || user.email === 'eimrib@yess.ai';
-    
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const { emails, role, department } = body;
-
-    if (!emails || !Array.isArray(emails)) {
-      return NextResponse.json({ error: 'Emails array is required' }, { status: 400 });
-    }
-
-    const results = {
-      successful: [] as string[],
-      failed: [] as { email: string; reason: string }[]
-    };
-
-    for (const email of emails) {
-      try {
-        // Check if user already exists
-        const { data: existingProfile } = await supabase
-          .from('user_profiles')
-          .select('id')
-          .eq('email', email)
-          .single();
-
-        if (existingProfile) {
-          results.failed.push({ email, reason: 'User already exists' });
-          continue;
-        }
-
-        // Create invitation
-        const invitationToken = crypto.randomUUID();
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
-
-        await supabase
-          .from('user_invitations')
-          .insert({
-            email,
-            role: role || 'viewer',
-            invited_by: user.id,
-            invitation_token: invitationToken,
-            expires_at: expiresAt.toISOString(),
-            metadata: { department }
-          });
-
-        results.successful.push(email);
-      } catch (error) {
-        results.failed.push({ email, reason: 'Failed to create invitation' });
-      }
-    }
-
-    // Log the bulk action
-    await supabase
-      .from('user_activity_logs')
-      .insert({
-        user_id: user.id,
-        action: 'BULK_USERS_INVITED',
-        resource_type: 'user',
-        details: {
-          total: emails.length,
-          successful: results.successful.length,
-          failed: results.failed.length
-        }
-      });
-
-    return NextResponse.json({
-      success: true,
-      results,
-      message: `Invited ${results.successful.length} users successfully`
-    });
-
-  } catch (error: any) {
-    console.error('Bulk invite error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to send bulk invitations' },
+      { error: error.message || 'Failed to create user' },
       { status: 500 }
     );
   }

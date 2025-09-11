@@ -27,7 +27,7 @@ interface UserData {
   email: string;
   full_name: string | null;
   role: string;
-  status?: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -134,8 +134,12 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant="outline">
-                  {user.status || 'active'}
+                <Badge 
+                  variant={user.status === 'pending' ? 'secondary' : 'outline'}
+                  className={user.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : ''}
+                  title={user.status === 'pending' ? 'User has not signed in yet' : 'User has signed in'}
+                >
+                  {user.status === 'pending' ? 'Pending' : 'Active'}
                 </Badge>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">

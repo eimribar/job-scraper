@@ -130,7 +130,7 @@ export default function AdminUsersClient({ users, currentUserId }: AdminUsersCli
               </Button>
               <Button onClick={() => setIsInviteModalOpen(true)} size="sm">
                 <UserPlus className="h-4 w-4 mr-2" />
-                Invite User
+                Create User
               </Button>
             </div>
           </div>

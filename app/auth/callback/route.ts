@@ -11,36 +11,80 @@ export async function GET(request: Request) {
     const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (user && !error) {
-      // Ensure user profile exists
-      const { data: profile } = await supabase
+      // First, check if a profile exists with this auth ID
+      const { data: existingProfile } = await supabase
         .from('user_profiles')
-        .select('id')
+        .select('*')
         .eq('id', user.id)
         .single();
       
-      if (!profile) {
-        // Create profile if it doesn't exist
-        const isAdmin = user.email === 'eimrib@yess.ai';
-        
+      if (existingProfile) {
+        // Profile already linked to this auth user - just update last login
         await supabase
           .from('user_profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || 
-                      user.user_metadata?.name || 
-                      user.email?.split('@')[0] || 'User',
-            avatar_url: user.user_metadata?.avatar_url || 
-                       user.user_metadata?.picture || null,
-            role: isAdmin ? 'admin' : 'viewer',
-            status: 'active',
-            created_at: new Date().toISOString(),
+          .update({
             updated_at: new Date().toISOString()
           })
-          .select()
+          .eq('id', user.id);
+      } else {
+        // Check if a pre-created profile exists with this email
+        const { data: preCreatedProfile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('email', user.email)
           .single();
         
-        console.log(`Profile created for ${user.email} with role: ${isAdmin ? 'admin' : 'viewer'}`);
+        if (preCreatedProfile) {
+          // Pre-created user signing in for the first time!
+          // Delete the old placeholder profile and create a new one with the auth ID
+          await supabase
+            .from('user_profiles')
+            .delete()
+            .eq('id', preCreatedProfile.id);
+          
+          // Create new profile with auth user ID, keeping all pre-set data
+          await supabase
+            .from('user_profiles')
+            .insert({
+              id: user.id, // Use auth user ID
+              email: user.email,
+              full_name: preCreatedProfile.full_name || 
+                        user.user_metadata?.full_name || 
+                        user.user_metadata?.name || 
+                        user.email?.split('@')[0] || 'User',
+              avatar_url: user.user_metadata?.avatar_url || 
+                         user.user_metadata?.picture || null,
+              role: preCreatedProfile.role, // Keep pre-assigned role
+              status: 'active', // Activate the account
+              created_at: preCreatedProfile.created_at, // Keep original creation date
+              updated_at: new Date().toISOString()
+            });
+          
+          console.log(`Pre-created user ${user.email} activated with role: ${preCreatedProfile.role}`);
+        } else {
+          // New user - not pre-created by admin
+          // Check if we allow open registration or if it's admin only
+          const isAdmin = user.email === 'eimrib@yess.ai';
+          
+          // For now, allow all new users but as viewers
+          await supabase
+            .from('user_profiles')
+            .insert({
+              id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || 
+                        user.user_metadata?.name || 
+                        user.email?.split('@')[0] || 'User',
+              avatar_url: user.user_metadata?.avatar_url || 
+                         user.user_metadata?.picture || null,
+              role: isAdmin ? 'admin' : 'viewer',
+              status: 'active',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          console.log(`New user ${user.email} created with role: ${isAdmin ? 'admin' : 'viewer'}`);
+        }
       }
     }
   }
