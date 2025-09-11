@@ -49,7 +49,7 @@ export function Sidebar({ className }: SidebarProps) {
         const { data: profile, error } = await supabase
           .from('user_profiles')
           .select('email, full_name, role, avatar_url')
-          .eq('id', user.id)
+          .or(`auth_id.eq.${user.id},id.eq.${user.id}`)
           .single();
         
         console.log('Profile from DB:', profile, 'Error:', error);

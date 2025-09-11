@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('role')
-      .eq('id', user.id)
+      .or(`auth_id.eq.${user.id},id.eq.${user.id}`)
       .single();
 
     if (profile?.role !== 'admin') {
