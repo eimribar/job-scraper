@@ -11,21 +11,25 @@ export async function GET(request: Request) {
     const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (user && !error) {
-      // First, check if a profile exists with this auth ID
+      // Check if a profile exists with this auth ID (returning user)
       const { data: existingProfile } = await supabase
         .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
+        .or(`auth_id.eq.${user.id},id.eq.${user.id}`)
         .single();
       
       if (existingProfile) {
-        // Profile already linked to this auth user - just update last login
+        // Profile already exists - just update last login
         await supabase
           .from('user_profiles')
           .update({
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            is_authenticated: true,
+            auth_id: user.id // Ensure auth_id is set
           })
-          .eq('id', user.id);
+          .or(`auth_id.eq.${user.id},id.eq.${user.id}`);
+        
+        console.log(`Existing user ${user.email} logged in`);
       } else {
         // Check if a pre-created profile exists with this email
         const { data: preCreatedProfile } = await supabase
@@ -36,41 +40,31 @@ export async function GET(request: Request) {
         
         if (preCreatedProfile) {
           // Pre-created user signing in for the first time!
-          // Delete the old placeholder profile and create a new one with the auth ID
+          // Link the auth account to the pre-created profile
           await supabase
             .from('user_profiles')
-            .delete()
-            .eq('id', preCreatedProfile.id);
-          
-          // Create new profile with auth user ID, keeping all pre-set data
-          await supabase
-            .from('user_profiles')
-            .insert({
-              id: user.id, // Use auth user ID
-              email: user.email,
-              full_name: preCreatedProfile.full_name || 
-                        user.user_metadata?.full_name || 
-                        user.user_metadata?.name || 
-                        user.email?.split('@')[0] || 'User',
-              avatar_url: user.user_metadata?.avatar_url || 
-                         user.user_metadata?.picture || null,
-              role: preCreatedProfile.role, // Keep pre-assigned role
+            .update({
+              auth_id: user.id, // Link to auth user
+              is_authenticated: true,
               status: 'active', // Activate the account
-              created_at: preCreatedProfile.created_at, // Keep original creation date
+              avatar_url: user.user_metadata?.avatar_url || 
+                         user.user_metadata?.picture || 
+                         preCreatedProfile.avatar_url,
               updated_at: new Date().toISOString()
-            });
+            })
+            .eq('id', preCreatedProfile.id);
           
           console.log(`Pre-created user ${user.email} activated with role: ${preCreatedProfile.role}`);
         } else {
           // New user - not pre-created by admin
-          // Check if we allow open registration or if it's admin only
           const isAdmin = user.email === 'eimrib@yess.ai';
           
-          // For now, allow all new users but as viewers
+          // Create new profile for this user
           await supabase
             .from('user_profiles')
             .insert({
-              id: user.id,
+              id: crypto.randomUUID(), // New random ID for the profile
+              auth_id: user.id, // Link to auth user
               email: user.email,
               full_name: user.user_metadata?.full_name || 
                         user.user_metadata?.name || 
@@ -79,6 +73,7 @@ export async function GET(request: Request) {
                          user.user_metadata?.picture || null,
               role: isAdmin ? 'admin' : 'viewer',
               status: 'active',
+              is_authenticated: true,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             });

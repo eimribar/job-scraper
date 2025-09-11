@@ -18,7 +18,7 @@ export default async function AdminUsersPage() {
   let { data: profile } = await supabase
     .from('user_profiles')
     .select('role')
-    .eq('id', user.id)
+    .or(`auth_id.eq.${user.id},id.eq.${user.id}`)
     .single();
 
   // If profile doesn't exist and it's the admin email, create it
