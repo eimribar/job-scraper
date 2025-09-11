@@ -83,17 +83,17 @@ export default function AdminUsersClient({ users, currentUserId }: AdminUsersCli
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">Editors</p>
+            <p className="text-sm text-muted-foreground">Managers</p>
             <p className="text-2xl font-bold text-slate-900">
-              {users.filter(u => u.role === 'editor').length}
+              {users.filter(u => u.role === 'manager').length}
             </p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-6">
-            <p className="text-sm text-muted-foreground">Viewers</p>
+            <p className="text-sm text-muted-foreground">Users</p>
             <p className="text-2xl font-bold text-slate-900">
-              {users.filter(u => u.role === 'viewer').length}
+              {users.filter(u => u.role === 'user').length}
             </p>
           </CardContent>
         </Card>

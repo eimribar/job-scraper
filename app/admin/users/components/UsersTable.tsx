@@ -77,8 +77,8 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'editor': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'viewer': return 'bg-slate-50 text-slate-700 border-slate-200';
+      case 'manager': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'user': return 'bg-slate-50 text-slate-700 border-slate-200';
       default: return 'bg-slate-50 text-slate-700 border-slate-200';
     }
   };
@@ -86,8 +86,8 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'admin': return Shield;
-      case 'editor': return Edit;
-      case 'viewer': return Eye;
+      case 'manager': return Edit;
+      case 'user': return Eye;
       default: return User;
     }
   };
@@ -165,18 +165,18 @@ export default function UsersTable({ users, currentUserId }: UsersTableProps) {
                           Make Admin
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => handleRoleChange(user.id, 'editor')}
-                          disabled={user.role === 'editor'}
+                          onClick={() => handleRoleChange(user.id, 'manager')}
+                          disabled={user.role === 'manager'}
                         >
                           <Edit className="mr-2 h-4 w-4" />
-                          Make Editor
+                          Make Manager
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => handleRoleChange(user.id, 'viewer')}
-                          disabled={user.role === 'viewer'}
+                          onClick={() => handleRoleChange(user.id, 'user')}
+                          disabled={user.role === 'user'}
                         >
                           <Eye className="mr-2 h-4 w-4" />
-                          Make Viewer
+                          Make User
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 

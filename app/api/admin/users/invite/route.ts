@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         id: newUserId,
         email: email,
         full_name: full_name || email.split('@')[0],
-        role: role || 'viewer',
+        role: role || 'user',
         status: 'pending',
         is_authenticated: false,
         created_at: new Date().toISOString(),

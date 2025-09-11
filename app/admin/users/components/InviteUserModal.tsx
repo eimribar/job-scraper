@@ -26,7 +26,7 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
   const [formData, setFormData] = useState({
     email: '',
     full_name: '',
-    role: 'viewer'
+    role: 'user'
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +47,7 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
 
       const data = await response.json();
       toast.success(`User created! ${formData.email} can now sign in with Google.`);
-      setFormData({ email: '', full_name: '', role: 'viewer' });
+      setFormData({ email: '', full_name: '', role: 'user' });
       onClose();
       window.location.reload();
     } catch (error: any) {
@@ -101,8 +101,8 @@ export default function InviteUserModal({ open, onClose }: InviteUserModalProps)
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="editor">Editor</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="user">User</SelectItem>
               </SelectContent>
             </Select>
           </div>

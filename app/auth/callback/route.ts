@@ -71,7 +71,7 @@ export async function GET(request: Request) {
                         user.email?.split('@')[0] || 'User',
               avatar_url: user.user_metadata?.avatar_url || 
                          user.user_metadata?.picture || null,
-              role: isAdmin ? 'admin' : 'viewer',
+              role: isAdmin ? 'admin' : 'user',
               status: 'active',
               is_authenticated: true,
               created_at: new Date().toISOString(),
