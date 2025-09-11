@@ -19,7 +19,9 @@ let jobsProcessed = 0;
 let companiesFound = 0;
 let errors = 0;
 let jobsSkipped = 0;
-let identifiedCompaniesSet = new Set();
+// Track companies for smart skipping
+let recentCompaniesSet = new Set();  // Companies < 3 months old (skip entirely)
+let oldCompanyToolSet = new Set();   // Company+tool combos > 3 months old
 
 async function analyzeJob(job) {
   // ⚠️ CRITICAL: NEVER CHANGE THIS STRUCTURE - HARDCODED BEST PRACTICE ⚠️
@@ -150,17 +152,37 @@ async function loadIdentifiedCompanies() {
   
   const { data: companies } = await supabase
     .from('identified_companies')
-    .select('company, tool_detected');
-    
+    .select('company, tool_detected, created_at');
+  
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  
+  // Clear sets
+  recentCompaniesSet.clear();
+  oldCompanyToolSet.clear();
+  
+  let recentCount = 0;
+  let oldCount = 0;
+  
   companies?.forEach(c => {
-    // Store normalized company name for better matching
     const normalized = c.company.toLowerCase().trim();
-    identifiedCompaniesSet.add(normalized);
-    // Also store original name
-    identifiedCompaniesSet.add(c.company);
+    const createdDate = new Date(c.created_at);
+    const isRecent = createdDate > threeMonthsAgo;
+    
+    if (isRecent) {
+      // Company identified < 3 months ago - skip entirely
+      recentCompaniesSet.add(normalized);
+      recentCompaniesSet.add(c.company); // Also add original
+      recentCount++;
+    } else {
+      // Company > 3 months old - track tool combo
+      oldCompanyToolSet.add(`${normalized}|${c.tool_detected}`);
+      oldCount++;
+    }
   });
   
-  console.log(`   Loaded ${identifiedCompaniesSet.size} company variations`);
+  console.log(`   Loaded ${recentCount} recent companies (< 3 months, will skip)`);
+  console.log(`   Loaded ${oldCount} old company+tool combos (> 3 months)`);
 }
 
 async function processJobs() {
@@ -210,11 +232,13 @@ async function processJobs() {
         if (shouldStop) break;
         
         try {
-          // Check if company already identified
+          // Check if company should be skipped
           const companyNormalized = job.company.toLowerCase().trim();
-          if (identifiedCompaniesSet.has(job.company) || identifiedCompaniesSet.has(companyNormalized)) {
+          
+          // Skip if identified < 3 months ago
+          if (recentCompaniesSet.has(job.company) || recentCompaniesSet.has(companyNormalized)) {
             process.stdout.write(`  Skipping ${job.company}... `);
-            console.log('⏭️ Already identified');
+            console.log('⏭️ Recently identified (< 3 months)');
             
             // Mark as processed but skipped
             await supabase
@@ -259,6 +283,23 @@ async function processJobs() {
           
           // If tool detected, save to identified_companies
           if (analysis.uses_tool && analysis.tool_detected !== 'none') {
+            // Check if this is an old company with the same tool already
+            const toolKey = `${companyNormalized}|${analysis.tool_detected}`;
+            if (oldCompanyToolSet.has(toolKey)) {
+              console.log(`✗ Skipped - ${analysis.tool_detected} already known for this company (>3 months old)`);
+              
+              // Mark as processed but don't save again
+              await supabase
+                .from('raw_jobs')
+                .update({ 
+                  processed: true, 
+                  analyzed_date: new Date().toISOString() 
+                })
+                .eq('job_id', job.job_id);
+              
+              jobsSkipped++;
+              continue;
+            }
             // First check if company+tool combination already exists
             const { data: existing } = await supabase
               .from('identified_companies')
@@ -303,8 +344,9 @@ async function processJobs() {
               if (!insertError) {
                 console.log(`✓ ${analysis.tool_detected}`);
                 companiesFound++;
-                // Add to set to prevent re-processing
-                identifiedCompaniesSet.add(job.company.toLowerCase().trim());
+                // Add to recent set to prevent re-processing
+                recentCompaniesSet.add(job.company.toLowerCase().trim());
+                recentCompaniesSet.add(job.company);
               } else {
                 console.log(`⚠️ Insert error: ${insertError.message}`);
               }

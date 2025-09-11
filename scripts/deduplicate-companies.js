@@ -1,169 +1,192 @@
-#!/usr/bin/env node
+/**
+ * Deduplication Utility for Identified Companies
+ * 
+ * This script:
+ * 1. Finds company name variations
+ * 2. Merges duplicates (keeping the oldest)
+ * 3. Normalizes company names
+ */
 
 require('dotenv').config({ path: '.env.local' });
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
-function createApiSupabaseClient() {
-  return createClient(supabaseUrl, supabaseKey);
+/**
+ * Normalize company name for comparison
+ */
+function normalizeCompanyName(name) {
+  return name
+    .toLowerCase()
+    .replace(/\s+/g, ' ')  // Normalize spaces
+    .replace(/[™®©]/g, '') // Remove trademark symbols
+    .replace(/,?\s*(inc\.?|llc|corp\.?|corporation|ltd\.?|limited|co\.?|company|plc|gmbh|ag|sa|srl|pvt\.?|private|group|holdings?|international|global|worldwide|solutions?|services?|technologies?|systems?|software|consulting|partners?)\s*$/gi, '') // Remove common suffixes
+    .replace(/^(the|a|an)\s+/i, '') // Remove articles
+    .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+    .trim();
+}
+
+/**
+ * Check if two company names are likely the same
+ */
+function areSameCompany(name1, name2) {
+  const norm1 = normalizeCompanyName(name1);
+  const norm2 = normalizeCompanyName(name2);
+  
+  // Exact match after normalization
+  if (norm1 === norm2) return true;
+  
+  // Special cases - known variations
+  const specialCases = [
+    ['opengov', 'opengov inc'],
+    ['riskonnect', 'riskonnect inc'],
+    ['buxton', 'buxton company'],
+    ['cypris', 'cypris '],
+    ['outreach', 'outreach '],
+    ['precision point staffing', 'precision point staffing tm'],
+    ['aci learning', 'itpro from aci learning'],
+    ['vector solutions', 'vector solutions k12'],
+  ];
+  
+  for (const [a, b] of specialCases) {
+    if ((norm1.includes(a) && norm2.includes(b)) || 
+        (norm1.includes(b) && norm2.includes(a))) {
+      return true;
+    }
+  }
+  
+  // Only treat as same if one is exactly contained in the other
+  // AND the difference is just common suffixes/prefixes
+  if (norm1.length > 5 && norm2.length > 5) {
+    if (norm1 === norm2) return true;
+    
+    // Check for trailing spaces or minor variations
+    if (name1.trim() === name2.trim() + ' ' || 
+        name2.trim() === name1.trim() + ' ') {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 async function deduplicateCompanies() {
-  console.log('🔍 DEDUPLICATING COMPANY RECORDS');
-  console.log('='.repeat(60));
+  console.log('🔍 Starting deduplication process...\n');
   
-  const supabase = createApiSupabaseClient();
+  // Get all companies
+  const { data: allCompanies, error } = await supabase
+    .from('identified_companies')
+    .select('*')
+    .order('created_at', { ascending: true });
   
-  try {
-    // Step 1: Find duplicate companies
-    console.log('\n1️⃣ Finding duplicate companies...');
+  if (error) {
+    console.error('Error fetching companies:', error);
+    return;
+  }
+  
+  console.log(`Analyzing ${allCompanies.length} companies...\n`);
+  
+  // Group potential duplicates
+  const groups = [];
+  const processed = new Set();
+  
+  for (let i = 0; i < allCompanies.length; i++) {
+    if (processed.has(i)) continue;
     
-    const { data: allCompanies, error: fetchError } = await supabase
-      .from('identified_companies')
-      .select('*')
-      .order('identified_date', { ascending: true });
+    const company = allCompanies[i];
+    const group = [company];
+    processed.add(i);
     
-    if (fetchError) {
-      console.error('Error fetching companies:', fetchError);
-      return;
-    }
-    
-    console.log(`Total records: ${allCompanies.length}`);
-    
-    // Group by normalized company name
-    const companyGroups = {};
-    allCompanies.forEach(company => {
-      const normalized = company.company_name.toLowerCase().trim();
-      if (!companyGroups[normalized]) {
-        companyGroups[normalized] = [];
+    // Find all variations of this company
+    for (let j = i + 1; j < allCompanies.length; j++) {
+      if (processed.has(j)) continue;
+      
+      const other = allCompanies[j];
+      
+      // Same tool required for deduplication
+      if (company.tool_detected !== other.tool_detected) continue;
+      
+      if (areSameCompany(company.company, other.company)) {
+        group.push(other);
+        processed.add(j);
       }
-      companyGroups[normalized].push(company);
-    });
-    
-    // Find duplicates
-    const duplicates = Object.entries(companyGroups).filter(([_, companies]) => companies.length > 1);
-    
-    console.log(`\n📊 Found ${duplicates.length} companies with duplicates`);
-    
-    if (duplicates.length === 0) {
-      console.log('✅ No duplicates found!');
-      return;
     }
     
-    // Step 2: Show duplicate analysis
-    console.log('\n2️⃣ Duplicate Analysis:');
-    
-    let totalDuplicateRecords = 0;
-    const mergePlan = [];
-    
-    duplicates.forEach(([normalizedName, companies]) => {
-      totalDuplicateRecords += companies.length - 1;
-      
-      // Sort by date to keep the earliest
-      companies.sort((a, b) => new Date(a.identified_date) - new Date(b.identified_date));
-      
-      const keeper = companies[0];
-      const toDelete = companies.slice(1);
-      
-      // Collect all unique tools detected
-      const allTools = new Set();
-      companies.forEach(c => {
-        if (c.tool_detected) allTools.add(c.tool_detected);
-      });
-      
-      // Determine the best confidence level
-      const confidenceLevels = ['high', 'medium', 'low'];
-      let bestConfidence = 'low';
-      companies.forEach(c => {
-        const idx = confidenceLevels.indexOf(c.confidence);
-        const bestIdx = confidenceLevels.indexOf(bestConfidence);
-        if (idx < bestIdx) {
-          bestConfidence = c.confidence;
-        }
-      });
-      
-      console.log(`\n   📦 ${companies[0].company_name}:`);
-      console.log(`      - ${companies.length} records found`);
-      console.log(`      - Keeping: ${keeper.identified_date} (${keeper.tool_detected})`);
-      console.log(`      - Deleting: ${toDelete.length} duplicate(s)`);
-      
-      mergePlan.push({
-        normalizedName,
-        keeper,
-        toDelete,
-        allTools: Array.from(allTools),
-        bestConfidence
-      });
+    if (group.length > 1) {
+      groups.push(group);
+    }
+  }
+  
+  if (groups.length === 0) {
+    console.log('✅ No duplicates found!');
+    return;
+  }
+  
+  console.log(`Found ${groups.length} groups of potential duplicates:\n`);
+  
+  // Display duplicates
+  groups.forEach((group, idx) => {
+    console.log(`Group ${idx + 1} (${group[0].tool_detected}):`);
+    group.forEach(company => {
+      console.log(`  - "${company.company}" (created: ${company.created_at})`);
     });
+    console.log();
+  });
+  
+  // Ask for confirmation
+  console.log('Would you like to merge these duplicates? (keeping the oldest record)');
+  console.log('Run with --merge flag to proceed with deduplication\n');
+  
+  if (process.argv.includes('--merge')) {
+    console.log('🔄 Merging duplicates...\n');
     
-    console.log(`\n📊 Summary:`);
-    console.log(`   - Total duplicate records to remove: ${totalDuplicateRecords}`);
-    console.log(`   - Records after cleanup: ${allCompanies.length - totalDuplicateRecords}`);
+    let merged = 0;
+    let deleted = 0;
     
-    // Step 3: Execute deduplication
-    console.log('\n3️⃣ Execute deduplication? (Simulating for safety)');
-    console.log('   To actually execute, uncomment the deletion code below');
-    
-    // UNCOMMENT TO ACTUALLY DELETE DUPLICATES
-    /*
-    console.log('\n🗑️ Removing duplicates...');
-    
-    for (const plan of mergePlan) {
-      // Update keeper with best data if needed
-      if (plan.allTools.length > 1 && plan.keeper.tool_detected !== 'Both') {
-        const { error: updateError } = await supabase
-          .from('identified_companies')
-          .update({
-            tool_detected: 'Both',
-            confidence: plan.bestConfidence
-          })
-          .eq('id', plan.keeper.id);
+    for (const group of groups) {
+      // Keep the first (oldest) record
+      const keep = group[0];
+      const toDelete = group.slice(1);
+      
+      console.log(`Keeping: "${keep.company}" (${keep.tool_detected})`);
+      
+      for (const duplicate of toDelete) {
+        console.log(`  Deleting: "${duplicate.company}"`);
         
-        if (updateError) {
-          console.error(`Error updating ${plan.keeper.company_name}:`, updateError);
-        }
-      }
-      
-      // Delete duplicates
-      for (const duplicate of plan.toDelete) {
         const { error: deleteError } = await supabase
           .from('identified_companies')
           .delete()
           .eq('id', duplicate.id);
         
         if (deleteError) {
-          console.error(`Error deleting duplicate for ${duplicate.company_name}:`, deleteError);
+          console.error(`    ❌ Error deleting: ${deleteError.message}`);
+        } else {
+          deleted++;
         }
       }
       
-      console.log(`   ✅ Cleaned up ${plan.keeper.company_name}`);
+      merged++;
+      console.log();
     }
     
-    console.log('\n✅ Deduplication complete!');
-    */
+    console.log(`\n✅ Deduplication complete!`);
+    console.log(`   Merged ${merged} groups`);
+    console.log(`   Deleted ${deleted} duplicate records`);
     
-    // Step 4: Generate SQL for manual execution (safer)
-    console.log('\n4️⃣ SQL for manual deduplication:');
-    console.log('\n-- Run this in Supabase SQL Editor to deduplicate:\n');
+    // Final count
+    const { count } = await supabase
+      .from('identified_companies')
+      .select('*', { count: 'exact', head: true });
     
-    const deleteIds = [];
-    mergePlan.forEach(plan => {
-      plan.toDelete.forEach(dup => {
-        deleteIds.push(dup.id);
-      });
-    });
-    
-    if (deleteIds.length > 0) {
-      console.log(`DELETE FROM identified_companies`);
-      console.log(`WHERE id IN (${deleteIds.map(id => `'${id}'`).join(', ')});`);
-      console.log(`\n-- This will delete ${deleteIds.length} duplicate records`);
-    }
-    
-  } catch (error) {
-    console.error('Fatal error:', error);
+    console.log(`   Total companies now: ${count}`);
+  } else {
+    console.log('To merge duplicates, run: node scripts/deduplicate-companies.js --merge');
   }
 }
 
+// Run the deduplication
 deduplicateCompanies().catch(console.error);

@@ -14,7 +14,8 @@ import { createApiSupabaseClient } from '../supabase';
 export class UnifiedProcessorService {
   private supabase;
   // OpenAI client removed - using fetch with Responses API
-  private identifiedCompaniesCache: Set<string> = new Set();
+  private recentCompaniesCache: Set<string> = new Set();  // Companies < 3 months old
+  private oldCompanyToolCache: Set<string> = new Set();    // Company+tool > 3 months old
   private lastCacheUpdate: number = 0;
   private CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private isRunning = false;
@@ -97,49 +98,58 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
     const now = Date.now();
     
     // Only refresh if cache is expired
-    if (now - this.lastCacheUpdate < this.CACHE_TTL && this.identifiedCompaniesCache.size > 0) {
+    if (now - this.lastCacheUpdate < this.CACHE_TTL && 
+        (this.recentCompaniesCache.size > 0 || this.oldCompanyToolCache.size > 0)) {
       return;
     }
 
     try {
       console.log('🔄 Refreshing identified companies cache...');
       
-      // Try to load from master list file first
-      const fs = require('fs');
-      const path = require('path');
-      const masterListPath = path.join(process.cwd(), 'never-analyze-companies.json');
+      // Load from database
+      const { data, error } = await this.supabase
+        .from('identified_companies')
+        .select('company, tool_detected, created_at');
       
-      if (fs.existsSync(masterListPath)) {
-        const masterList = JSON.parse(fs.readFileSync(masterListPath, 'utf-8'));
-        this.identifiedCompaniesCache.clear();
-        
-        masterList.companies.forEach((company: string) => {
-          this.identifiedCompaniesCache.add(company.toLowerCase().trim());
+      if (error) {
+        console.error('❌ Error fetching identified companies:', error);
+        return;
+      }
+
+      // Clear caches
+      this.recentCompaniesCache.clear();
+      this.oldCompanyToolCache.clear();
+      
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      
+      let recentCount = 0;
+      let oldCount = 0;
+      
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          if (row.company) {
+            const normalized = row.company.toLowerCase().trim();
+            const createdDate = new Date(row.created_at);
+            const isRecent = createdDate > threeMonthsAgo;
+            
+            if (isRecent) {
+              // Company < 3 months old - skip entirely
+              this.recentCompaniesCache.add(normalized);
+              this.recentCompaniesCache.add(row.company);
+              recentCount++;
+            } else {
+              // Company > 3 months old - track tool combo
+              if (row.tool_detected) {
+                this.oldCompanyToolCache.add(`${normalized}|${row.tool_detected}`);
+                oldCount++;
+              }
+            }
+          }
         });
         
-        console.log(`✅ Loaded ${this.identifiedCompaniesCache.size} companies from master list`);
-      } else {
-        // Fallback to database
-        const { data, error } = await this.supabase
-          .from('identified_companies')
-          .select('company');
-        
-        if (error) {
-          console.error('❌ Error fetching identified companies:', error);
-          return;
-        }
-
-        this.identifiedCompaniesCache.clear();
-        
-        if (data && data.length > 0) {
-          data.forEach(row => {
-            if (row.company) {
-              this.identifiedCompaniesCache.add(row.company.toLowerCase().trim());
-            }
-          });
-          
-          console.log(`✅ Cached ${this.identifiedCompaniesCache.size} companies from database`);
-        }
+        console.log(`✅ Cached ${recentCount} recent companies (< 3 months, will skip)`);
+        console.log(`✅ Cached ${oldCount} old company+tool combos (> 3 months)`);
       }
       
       this.lastCacheUpdate = now;
@@ -149,10 +159,19 @@ You must respond with ONLY valid JSON. No explanation. No markdown. Just the JSO
   }
 
   /**
-   * Check if company is already identified
+   * Check if company is recently identified (< 3 months)
    */
-  isCompanyAlreadyIdentified(companyName: string): boolean {
-    return this.identifiedCompaniesCache.has(companyName.toLowerCase().trim());
+  isCompanyRecentlyIdentified(companyName: string): boolean {
+    return this.recentCompaniesCache.has(companyName.toLowerCase().trim()) ||
+           this.recentCompaniesCache.has(companyName);
+  }
+  
+  /**
+   * Check if company+tool combo exists for old companies
+   */
+  isOldCompanyToolExists(companyName: string, tool: string): boolean {
+    const key = `${companyName.toLowerCase().trim()}|${tool}`;
+    return this.oldCompanyToolCache.has(key);
   }
 
   /**
@@ -318,12 +337,12 @@ Job Description: ${job.description}`
         console.log(`[${i+1}/${jobs.length}] ${job.company} - ${job.job_title}`);
         
         try {
-          // Check if already identified
-          if (this.isCompanyAlreadyIdentified(job.company)) {
-            console.log(`  ⏭️ SKIPPED: Already identified`);
+          // Skip if company identified < 3 months ago
+          if (this.isCompanyRecentlyIdentified(job.company)) {
+            console.log(`  ⏭️ SKIPPED: Recently identified (< 3 months)`);
             skipped++;
             
-            // Mark as processed without analyzing
+            // Mark as processed
             await this.supabase
               .from('raw_jobs')
               .update({ 
@@ -361,35 +380,81 @@ Job Description: ${job.description}`
                 analysis.tool_detected === 'Both') {
               
               console.log(`  🎯 DETECTED: ${analysis.tool_detected}`);
+              
+              // Check if this is an old company with same tool
+              if (this.isOldCompanyToolExists(job.company, analysis.tool_detected)) {
+                console.log(`  ⏭️ SKIPPED: Tool already known for old company (>3 months)`);
+                skipped++;
+                
+                // Mark as processed
+                await this.supabase
+                  .from('raw_jobs')
+                  .update({ 
+                    processed: true,
+                    analyzed_date: new Date().toISOString()
+                  })
+                  .eq('job_id', job.job_id);
+                
+                processed++;
+                continue;
+              }
+              
               toolsFound++;
               
-              // Save to database
-              await this.supabase
+              // Check if company+tool already exists
+              const { data: existingCompany } = await this.supabase
                 .from('identified_companies')
-                .upsert({
-                  company: job.company,
-                  tool_detected: analysis.tool_detected,
-                  signal_type: analysis.signal_type || 'explicit_mention',
-                  context: analysis.context || '',
-                  job_title: job.job_title,
-                  job_url: job.job_url,
-                  platform: job.platform,
-                  identified_date: new Date().toISOString()
-                }, { 
-                  onConflict: 'company,tool_detected',
-                  ignoreDuplicates: false 
-                });
+                .select('id')
+                .eq('company', job.company)
+                .eq('tool_detected', analysis.tool_detected)
+                .single();
               
-              // Add to cache
-              this.identifiedCompaniesCache.add(job.company.toLowerCase().trim());
+              if (existingCompany) {
+                // Update existing record
+                await this.supabase
+                  .from('identified_companies')
+                  .update({
+                    signal_type: analysis.signal_type || 'required',
+                    context: analysis.context || '',
+                    job_title: job.job_title,
+                    job_url: job.job_url,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', existingCompany.id);
+                
+                console.log(`  📝 Updated existing entry`);
+              } else {
+                // Insert new record
+                const { error: insertError } = await this.supabase
+                  .from('identified_companies')
+                  .insert({
+                    company: job.company,
+                    tool_detected: analysis.tool_detected,
+                    signal_type: analysis.signal_type || 'required',
+                    context: analysis.context || '',
+                    job_title: job.job_title,
+                    job_url: job.job_url,
+                    platform: job.platform,
+                    identified_date: new Date().toISOString()
+                  });
+                
+                if (!insertError) {
+                  // Only create notification for NEW companies
+                  await this.createNotification(
+                    'company_discovered',
+                    `New company: ${job.company}`,
+                    `Uses ${analysis.tool_detected}`,
+                    { company: job.company, tool: analysis.tool_detected }
+                  );
+                  console.log(`  🎉 NEW company added!`);
+                } else {
+                  console.error(`  ❌ Insert error: ${insertError.message}`);
+                }
+              }
               
-              // Create notification
-              await this.createNotification(
-                'company_discovered',
-                `New company: ${job.company}`,
-                `Uses ${analysis.tool_detected}`,
-                { company: job.company, tool: analysis.tool_detected }
-              );
+              // Add to recent companies cache (new companies are < 3 months by definition)
+              this.recentCompaniesCache.add(job.company.toLowerCase().trim());
+              this.recentCompaniesCache.add(job.company); // Also add original case
             }
           } else {
             console.log(`  ✓ No tools detected`);
@@ -467,7 +532,8 @@ Job Description: ${job.description}`
       toolsDetected: this.stats.toolsDetected,
       skippedAlreadyIdentified: this.stats.skippedAlreadyIdentified,
       errors: this.stats.errors,
-      cachedCompanies: this.identifiedCompaniesCache.size
+      cachedRecentCompanies: this.recentCompaniesCache.size,
+      cachedOldCompanyTools: this.oldCompanyToolCache.size
     };
   }
 
