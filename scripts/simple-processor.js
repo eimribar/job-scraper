@@ -328,7 +328,7 @@ async function processJobs() {
               }
             } else {
               // Insert new record
-              const { error: insertError } = await supabase
+              const { data: insertedData, error: insertError } = await supabase
                 .from('identified_companies')
                 .insert({
                   company: job.company,
@@ -339,16 +339,32 @@ async function processJobs() {
                   job_url: job.job_url,
                   platform: job.platform || 'LinkedIn',
                   identified_date: new Date().toISOString()
-                });
+                })
+                .select()
+                .single();
                 
-              if (!insertError) {
+              if (!insertError && insertedData && insertedData.id) {
                 console.log(`✓ ${analysis.tool_detected}`);
                 companiesFound++;
-                // Add to recent set to prevent re-processing
+                // Add to recent set only after successful insert
                 recentCompaniesSet.add(job.company.toLowerCase().trim());
                 recentCompaniesSet.add(job.company);
+                
+                // Create notification for new company
+                await supabase
+                  .from('notifications')
+                  .insert({
+                    notification_type: 'company_discovered',
+                    title: `New company: ${job.company}`,
+                    message: `Uses ${analysis.tool_detected}`,
+                    metadata: { company: job.company, tool: analysis.tool_detected },
+                    created_at: new Date().toISOString()
+                  });
               } else {
-                console.log(`⚠️ Insert error: ${insertError.message}`);
+                console.log(`⚠️ Insert error: ${insertError?.message || 'No data returned'}`);
+                if (insertError) {
+                  console.log(`   Error code: ${insertError.code}`);
+                }
               }
             }
           } else {

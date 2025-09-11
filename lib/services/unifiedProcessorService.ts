@@ -425,7 +425,7 @@ Job Description: ${job.description}`
                 console.log(`  📝 Updated existing entry`);
               } else {
                 // Insert new record
-                const { error: insertError } = await this.supabase
+                const { data: insertedData, error: insertError } = await this.supabase
                   .from('identified_companies')
                   .insert({
                     company: job.company,
@@ -436,25 +436,37 @@ Job Description: ${job.description}`
                     job_url: job.job_url,
                     platform: job.platform,
                     identified_date: new Date().toISOString()
-                  });
+                  })
+                  .select()
+                  .single();
                 
-                if (!insertError) {
-                  // Only create notification for NEW companies
-                  await this.createNotification(
-                    'company_discovered',
-                    `New company: ${job.company}`,
-                    `Uses ${analysis.tool_detected}`,
-                    { company: job.company, tool: analysis.tool_detected }
-                  );
-                  console.log(`  🎉 NEW company added!`);
+                if (!insertError && insertedData) {
+                  // Verify the insert actually succeeded by checking the returned data
+                  if (insertedData.id) {
+                    // Only create notification after confirming insert succeeded
+                    await this.createNotification(
+                      'company_discovered',
+                      `New company: ${job.company}`,
+                      `Uses ${analysis.tool_detected}`,
+                      { company: job.company, tool: analysis.tool_detected }
+                    );
+                    console.log(`  🎉 NEW company added! ID: ${insertedData.id}`);
+                    
+                    // Add to recent companies cache only after successful insert
+                    this.recentCompaniesCache.add(job.company.toLowerCase().trim());
+                    this.recentCompaniesCache.add(job.company); // Also add original case
+                  } else {
+                    console.error(`  ⚠️ Insert returned no ID - notification skipped`);
+                  }
                 } else {
-                  console.error(`  ❌ Insert error: ${insertError.message}`);
+                  console.error(`  ❌ Insert error: ${insertError?.message || 'Unknown error'}`);
+                  // Log detailed error for debugging
+                  if (insertError) {
+                    console.error(`     Error code: ${insertError.code}`);
+                    console.error(`     Error details: ${JSON.stringify(insertError.details)}`);
+                  }
                 }
               }
-              
-              // Add to recent companies cache (new companies are < 3 months by definition)
-              this.recentCompaniesCache.add(job.company.toLowerCase().trim());
-              this.recentCompaniesCache.add(job.company); // Also add original case
             }
           } else {
             console.log(`  ✓ No tools detected`);
