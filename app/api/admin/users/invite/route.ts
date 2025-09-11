@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   try {
+    // Use regular client for auth check (respects user session)
     const supabase = await createClient();
     
     // Check if user is authenticated
@@ -31,19 +33,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    // Check if user already exists - handle no rows gracefully
-    const { data: existingProfiles, error: checkError } = await supabase
+    // Use ADMIN client for database operations (bypasses RLS)
+    const adminClient = createAdminClient();
+
+    // Check if user already exists
+    const { data: existingProfiles, error: checkError } = await adminClient
       .from('user_profiles')
       .select('id, status')
       .eq('email', email);
 
     if (checkError) {
       console.error('Error checking existing profile:', checkError);
+      return NextResponse.json({ 
+        error: 'Database error checking existing user' 
+      }, { status: 500 });
     }
 
     if (existingProfiles && existingProfiles.length > 0) {
       const existingProfile = existingProfiles[0];
-      // If user exists but is pending, that's ok - they haven't signed in yet
       if (existingProfile.status === 'pending') {
         return NextResponse.json({ 
           error: 'User already created. They can sign in with their Google account.' 
@@ -52,16 +59,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User already exists and is active' }, { status: 400 });
     }
 
-    // Create user profile directly - simple and clean
+    // Create user profile using ADMIN client (bypasses RLS)
     const newUserId = crypto.randomUUID();
-    const { data: newProfile, error: createError } = await supabase
+    const { data: newProfile, error: createError } = await adminClient
       .from('user_profiles')
       .insert({
         id: newUserId,
         email: email,
         full_name: full_name || email.split('@')[0],
         role: role || 'viewer',
-        status: 'pending', // Will become 'active' when they sign in
+        status: 'pending',
+        is_authenticated: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -71,7 +79,7 @@ export async function POST(request: NextRequest) {
     if (createError) {
       console.error('Error creating user profile:', createError);
       return NextResponse.json({ 
-        error: 'Failed to create user profile' 
+        error: `Failed to create user: ${createError.message}` 
       }, { status: 500 });
     }
 
