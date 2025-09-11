@@ -31,14 +31,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    // Check if user already exists
-    const { data: existingProfile } = await supabase
+    // Check if user already exists - handle no rows gracefully
+    const { data: existingProfiles, error: checkError } = await supabase
       .from('user_profiles')
       .select('id, status')
-      .eq('email', email)
-      .single();
+      .eq('email', email);
 
-    if (existingProfile) {
+    if (checkError) {
+      console.error('Error checking existing profile:', checkError);
+    }
+
+    if (existingProfiles && existingProfiles.length > 0) {
+      const existingProfile = existingProfiles[0];
       // If user exists but is pending, that's ok - they haven't signed in yet
       if (existingProfile.status === 'pending') {
         return NextResponse.json({ 
